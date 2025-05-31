@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QFileDialog,
 )
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QKeyEvent
 from PySide6.QtCore import Qt, QPointF, Signal, QObject
 from NodeGraphQt import (
     NodeGraph,
@@ -340,6 +340,25 @@ class AutomationDesigner(QMainWindow):
         self._graph.show()
         self._on_load(file_path=self.DEFAULT_GRAPH_FILE)
 
+
+
+
+    def keyPressEvent(self, event: QKeyEvent):
+        # Check for Delete or Backspace key
+        if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
+            selected_nodes = self._graph.selected_nodes()
+            if selected_nodes:
+                confirm = QMessageBox.question(self, "Delete Nodes",
+                                            f"Are you sure you want to delete {len(selected_nodes)} selected node(s)?",
+                                            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if confirm == QMessageBox.Yes:
+                    for node in selected_nodes:
+                        self._graph.remove_node(node)
+                    print(f"Deleted {len(selected_nodes)} node(s).")
+                    self.saveGraphs()
+                event.accept()
+                return
+        super(AutomationDesigner, self).keyPressEvent(event)
     # ──────────────────────────────────────────────────────────────────────────
     # 4.7) Build toolbar with Play, Pause, Stop
     # ──────────────────────────────────────────────────────────────────────────
