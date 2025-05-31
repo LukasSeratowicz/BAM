@@ -1,3 +1,18 @@
+"""
+main.py
+
+PySide6 + NodeGraphQt (“nodeeditor”) example with:
+  • Right-click → “Add Node” menu (Start / End / Delay / Keyboard / Mouse)
+  • A drop-down of most common key IDs in KeyboardNode
+  • PLAY | PAUSE | STOP toolbar at the top
+  • Proper graph traversal: Start → Delay → End using node.outputs()
+  • Chunked sleep in DelayNode to illustrate the delay and allow Pause/Stop mid-delay
+  • Debug prints to show exactly what connections each node has
+  • Uses node.id (attribute) and NodeGraph.all_nodes()
+  • Numeric fields remain text inputs (convert to int in process())
+  • Users can add multiple Start→…→End loops; each will run independently when PLAY is pressed
+"""
+
 import sys
 import threading
 import time
@@ -54,7 +69,7 @@ class StartNode(BaseNode):
     def process(self, **kwargs):
         """
         In a real engine, this would “emit” the start‐signal.
-        Here it’s stubbed.
+        Here it’s stubbed just to show the ID.
         """
         print(f"[StartNode: {self.id}] Fired.")
 
@@ -74,8 +89,8 @@ class EndNode(BaseNode):
 
     def process(self, **kwargs):
         """
-        In a real engine, this would mark the loop’s end and signpost a return to Start.
-        Here it’s stubbed.
+        In a real engine, this would mark the loop’s end.
+        Here it’s stubbed just to show the ID.
         """
         print(f"[EndNode: {self.id}] Reached.")
 
@@ -94,21 +109,29 @@ class DelayNode(BaseNode):
         self.add_input('in')
         self.add_output('out')
 
-        # Numeric field as text; convert to int during process()
+        # Numeric field as text (we chunk it in process() for responsive pause/stop)
         self.add_text_input('delay', 'Delay (ms)')
         self.set_property('delay', '1000')
 
     def process(self, **kwargs):
         """
-        Sleep for the specified number of milliseconds.
+        Sleep for the specified number of milliseconds, in 100ms chunks,
+        printing status each chunk so you see the delay happening.
         """
         try:
-            ms = int(self.get_property('delay'))
+            ms_total = int(self.get_property('delay'))
         except ValueError:
-            ms = 0
-        seconds = ms / 1000.0
-        print(f"[DelayNode: {self.id}] Sleeping for {ms} ms → {seconds:.3f} seconds.")
-        time.sleep(seconds)
+            ms_total = 0
+
+        print(f"[DelayNode: {self.id}] Beginning {ms_total} ms delay.")
+        # Break into 100ms increments so we can see progress and respect stop/pause.
+        ms_done = 0
+        while ms_done < ms_total:
+            chunk = min(100, ms_total - ms_done)
+            time.sleep(chunk / 1000.0)
+            ms_done += chunk
+            #print(f"[DelayNode: {self.id}] still sleeping... {ms_done}/{ms_total} ms")
+        print(f"[DelayNode: {self.id}] Completed delay.")
 
 
 class KeyboardNode(BaseNode):
@@ -200,7 +223,7 @@ class MouseNode(BaseNode):
         print(f"[MouseNode: {self.id}] Clicking at ({x}, {y}) with '{button}', hold {ms}ms")
         # In a real implementation, you might use:
         #    pyautogui.mouseDown(x, y, button=button.lower())
-        #    time.sleep(ms/1000.0)
+        #    time.sleep(ms / 1000.0)
         #    pyautogui.mouseUp(x, y, button=button.lower())
         time.sleep(ms / 1000.0)
 
@@ -305,7 +328,7 @@ class AutomationDesigner(QMainWindow):
     # ──────────────────────────────────────────────────────────────────────────
     def _show_context_menu(self, view_pos):
         """
-        Called when the user right‐clicks on the canvas.
+        Called when the user right-clicks on the canvas.
         Pop up a menu: Add Node → {Start, End, Delay, Keyboard, Mouse}.
         """
         # Convert VIEW coords → SCENE coords so new node appears where clicked:
@@ -406,17 +429,20 @@ class AutomationDesigner(QMainWindow):
     # ──────────────────────────────────────────────────────────────────────────
     def _run_loop(self, start_node, stop_event: threading.Event, pause_event: threading.Event):
         """
-        Very simplified “loop”:
-          1. While not stop_event.is_set():
-               a. If pause_event.is_set(): wait until it’s cleared (i.e. Play clicked again).
-               b. Traverse from start_node → … → End node, calling process() on each.
-               c. When an End node is reached, emit a signal and immediately jump back to Start.
+        Proper graph traversal for a simple chain:
+          1. While not stopped:
+               a. Wait if paused.
+               b. Call start_node.process().
+               c. Walk connections: from Start → next node → next → … until we hit an EndNode.
+                   • At each node, call node.process(). DelayNode.process() will sleep.
+               d. Once we hit an EndNode, emit a “loop iteration finished” signal.
+               e. Loop back to Start (unless stopped).
         """
-        start_id = start_node.id  # <-- attribute, not a call
+        start_id = start_node.id
         print(f"[LoopWorker-{start_id}] Thread started.")
 
         while not stop_event.is_set():
-            # 1) Handle Pause: if pause_event is set, wait in small increments
+            # 1) Handle Pause: if pause_event is set, wait until it’s cleared
             while pause_event.is_set() and not stop_event.is_set():
                 time.sleep(0.1)
 
@@ -426,20 +452,53 @@ class AutomationDesigner(QMainWindow):
             # 2) “Fire” the Start node
             start_node.process()
 
-            # 3) Walk the graph from this Start node until we hit an End node.
-            #    (***SUBSTITUTE IN REAL TRAVERSAL LOGIC HERE***)
-            #    For now, simply sleep a bit and then “hit” every End node we find.
-            time.sleep(0.2)  # simulate time spent in between nodes
+            # 3) Traverse the graph from StartNode → … → EndNode
+            current_node = start_node
 
-            # Call process() on all End nodes (placeholder)
-            all_nodes = self._graph.all_nodes()
-            end_nodes = [n for n in all_nodes if isinstance(n, EndNode)]
-            for end_node in end_nodes:
-                if stop_event.is_set():
+            while True:
+                # If current_node is already an EndNode, break out
+                if isinstance(current_node, EndNode):
                     break
-                end_node.process()
 
-            # 4) Notify that one iteration of this loop is finished
+                # Get all output ports (as a dict: { port_name: port_obj, ... })
+                outputs = current_node.outputs()
+                port_names = list(outputs.keys())
+                print(f"[Debug] Node {current_node.id} output ports: {port_names}")
+
+                if not port_names:
+                    # No outputs → stop traversal
+                    break
+
+                # Take the first output port
+                out_port = outputs[port_names[0]]
+
+                # See which ports are connected
+                connected_ports = out_port.connected_ports()
+                print(f"[Debug] Traversal at node {current_node.id}, connected_ports: {connected_ports}")
+
+                if not connected_ports:
+                    # No outgoing connections → stop
+                    break
+
+                # Take the first connection: (next_node_id, next_port_name)
+                next_node = connected_ports[0].node()
+                next_node_id = next_node.id
+                if next_node is None:
+                    print(f"[Debug] Could not find node with ID {next_node_id}")
+                    break
+
+                # Call process() on the next node (DelayNode will sleep here)
+                next_node.process()
+
+                # Move forward
+                current_node = next_node
+
+                # If we’ve reached an EndNode, stop the inner loop
+                if isinstance(current_node, EndNode):
+                    break
+
+            # 4) We’ve either hit an EndNode or there were no further connections.
+            #    Emit the loop‐finished signal for this StartNode:
             self._loop_controller.loop_iteration_finished.emit(start_id)
 
             # 5) Immediately loop back to Start, unless stop_event was set
