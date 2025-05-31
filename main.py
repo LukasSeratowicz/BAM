@@ -358,7 +358,7 @@ class AutomationDesigner(QMainWindow):
     def __init__(self):
         super(AutomationDesigner, self).__init__()
 
-        self.setWindowTitle('Automation Designer')
+        self.setWindowTitle('BAM - Big AutoMation')
         self.resize(1200, 800)
 
         # 4.1) Create the NodeGraph and register node types:
