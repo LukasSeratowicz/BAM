@@ -370,7 +370,7 @@ class AutomationDesigner(QMainWindow):
         self.setWindowTitle('BAM - Big AutoMation by Lucas S. -- github.com/LukasSeratowicz/BAM')
         self.resize(1200, 800)
 
-        # 4.1) Create the NodeGraph and register node types:
+        # 4.1.1) Create the NodeGraph and register node types:
         self._graph = NodeGraph()
         self._graph.register_node(StartNode)
         self._graph.register_node(EndNode)
@@ -378,36 +378,36 @@ class AutomationDesigner(QMainWindow):
         self._graph.register_node(KeyboardNode)
         self._graph.register_node(MouseNode)
 
-        # 4.2) Set the NodeGraph’s central widget:
+        # 4.1.2) Set the NodeGraph’s central widget:
         self.setCentralWidget(self._graph.widget)
 
-        # # 4.3) Add a “Properties” dock on the right:
+        # # 4.1.3) Add a “Properties” dock on the right:
         # self._properties_bin = PropertiesBinWidget(node_graph=self._graph)
         # properties_dock = QDockWidget('Properties', self)
         # properties_dock.setWidget(self._properties_bin)
         # properties_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         # self.addDockWidget(Qt.RightDockWidgetArea, properties_dock)
 
-        # 4.4) Add a “Nodes Palette” dock on the left:
+        # 4.1.4) Add a “Nodes Palette” dock on the left:
         self._nodes_palette = NodesPaletteWidget(node_graph=self._graph)
         palette_dock = QDockWidget('Nodes Palette', self)
         palette_dock.setWidget(self._nodes_palette)
         palette_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.addDockWidget(Qt.LeftDockWidgetArea, palette_dock)
 
-        # 4.5) Grab the QGraphicsView (the canvas) to intercept right‐click:
+        # 4.1.5) Grab the QGraphicsView (the canvas) to intercept right‐click:
         self._view = self._graph.viewer()
         self._view.setContextMenuPolicy(Qt.CustomContextMenu)
         self._view.customContextMenuRequested.connect(self._show_context_menu)
 
-        # 4.6) Remember the last scene position (for placing new nodes):
+        # 4.1.6) Remember the last scene position (for placing new nodes):
         self._last_scene_pos = QPointF(0, 0)
 
-        # 4.7) Build the top toolbar with Play | Pause | Stop:
+        # 4.1.7) Build the top toolbar with Play | Pause | Stop:
         self._build_toolbar()
         self._build_file_menu()
 
-        # 4.8) Prepare loop control structures:
+        # 4.1.8) Prepare loop control structures:
         #      _loop_threads maps Start node ID (string) → threading.Thread
         #      _loop_stop_flags maps Start node ID → threading.Event (to signal stop)
         #      _loop_pause_flags maps Start node ID → threading.Event (to signal pause)
@@ -415,13 +415,18 @@ class AutomationDesigner(QMainWindow):
         self._loop_stop_flags = {}
         self._loop_pause_flags = {}
 
-        # 4.9) A signal emitter if you need to hook back to the GUI when a loop iteration finishes:
+        # 4.1.9) A signal emitter if you need to hook back to the GUI when a loop iteration finishes:
         self._loop_controller = LoopController()
         self._loop_controller.loop_iteration_finished.connect(self._on_loop_iteration_finished)
 
-        # 4.10) Finally, show the NodeGraph’s window:
+        # 4.1.10) Finally, show the NodeGraph’s window:
         self._graph.show()
         self._on_load(file_path=self.DEFAULT_GRAPH_FILE)
+
+        # 4.1.11) Add this timer to check hard_start flag every 100ms
+        self._hard_start_timer = QTimer(self)
+        self._hard_start_timer.timeout.connect(self._check_hard_start)
+        self._hard_start_timer.start(100)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.11) Delete nodes with Delete or Backspace key
@@ -795,6 +800,17 @@ class AutomationDesigner(QMainWindow):
         We can use this signal to update a UI counter, log, or visual indicator.
         """
         print(f"[Main] Loop iteration finished for Start Node {start_id}.")
+
+        
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4.20) Check for F1 - hard start
+    # ──────────────────────────────────────────────────────────────────────────
+    def _check_hard_start(self):
+        global hard_start
+        if hard_start:
+            print("[Main] Hard start detected! Starting automation.")
+            self._on_play()
+            hard_start = False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
