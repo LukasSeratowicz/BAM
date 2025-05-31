@@ -1,4 +1,6 @@
 import sys
+import os
+import json
 import threading
 import time
 from PySide6.QtWidgets import (
@@ -8,6 +10,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QToolBar,
     QMessageBox,
+    QFileDialog,
 )
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt, QPointF, Signal, QObject
@@ -267,6 +270,7 @@ class LoopController(QObject):
 #    plus a toolbar (Play | Pause | Stop) and a threaded loop “engine.”
 # ──────────────────────────────────────────────────────────────────────────────
 class AutomationDesigner(QMainWindow):
+    DEFAULT_GRAPH_FILE = "autosave_graph.json"
     def __init__(self):
         super(AutomationDesigner, self).__init__()
 
@@ -308,6 +312,7 @@ class AutomationDesigner(QMainWindow):
 
         # 4.7) Build the top toolbar with Play | Pause | Stop:
         self._build_toolbar()
+        self._build_file_menu()
 
         # 4.8) Prepare loop control structures:
         #      _loop_threads maps Start node ID (string) → threading.Thread
@@ -323,6 +328,7 @@ class AutomationDesigner(QMainWindow):
 
         # 4.10) Finally, show the NodeGraph’s window:
         self._graph.show()
+        self._on_load(file_path=self.DEFAULT_GRAPH_FILE)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.7) Build toolbar with Play, Pause, Stop
@@ -345,6 +351,137 @@ class AutomationDesigner(QMainWindow):
         self._stop_action = QAction("Stop", self)
         self._stop_action.triggered.connect(self._on_stop)
         toolbar.addAction(self._stop_action)
+    # ──────────────────────────────────────────────────────────────────────────
+    # Save/Load handlers
+    # ──────────────────────────────────────────────────────────────────────────
+    def _on_new_graph(self):
+        """
+        Clears the current graph and stops all running loops.
+        """
+        reply = QMessageBox.question(self, "New Graph",
+                                    "Are you sure you want to create a new graph? Any unsaved changes will be lost.",
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self._on_stop() # Stop any running loops first
+            self._clear_all_nodes_fallback()
+            print("[Main] New graph created.")
+
+    def _on_save(self):
+        """
+        Saves the current graph to a JSON file.
+        """
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Graph",
+                                                 self.DEFAULT_GRAPH_FILE,
+                                                 "Graph Files (*.json);;All Files (*)")
+        if file_path:
+            try:
+                graph_data = self._graph.serialize_session()
+
+                # 2. Manually write the dictionary to the specified JSON file
+                with open(file_path, 'w') as f:
+                    json.dump(graph_data, f, indent=4) # Using indent for readability in the JSON file
+
+                print(f"[Main] Graph saved to: {file_path}")
+                # Optionally, update DEFAULT_GRAPH_FILE for next auto-save/load
+                self.DEFAULT_GRAPH_FILE = file_path
+            except Exception as e:
+                QMessageBox.critical(self, "Save Error", f"Failed to save graph: {e}")
+                print(f"[Main] Failed to save graph: {e}")
+
+
+    def _clear_all_nodes_fallback(self):
+        """
+        A fallback method to clear all nodes by iterating and removing them one by one.
+        This is used if standard methods like clear_nodes() or remove_all_nodes() are not available.
+        """
+        # It's important to convert to a list because you're modifying the collection
+        # while iterating. If you don't, you'll get a RuntimeError for changing size during iteration.
+        for node in list(self._graph.all_nodes()):
+            self._graph.remove_node(node)
+        print("[Main] All nodes cleared using fallback method.")
+
+    def _on_load(self, file_path=None):
+        """
+        Loads a graph from a JSON file. If file_path is None, a file dialog opens.
+        """
+        if file_path is None:
+            file_path, _ = QFileDialog.getOpenFileName(self, "Open Graph",
+                                                    self.DEFAULT_GRAPH_FILE,
+                                                    "Graph Files (*.json);;All Files (*)")
+        if file_path and os.path.exists(file_path): # Check if file exists for auto-load
+            self._on_stop() # Stop any running loops before loading a new graph
+            try:
+                # IMPORTANT: Before deserializing, you should clear existing nodes
+                # and ensure all custom node classes are registered (which you already do in __init__).
+                self._clear_all_nodes_fallback()
+
+                # CHANGED: Read the JSON file content into a dictionary
+                with open(file_path, 'r') as f:
+                    graph_data = json.load(f)
+
+                # Deserialize the graph from the file
+                self._graph.deserialize_session(graph_data)
+                print(f"[Main] Graph loaded from: {file_path}")
+                # Optionally, update DEFAULT_GRAPH_FILE for next auto-save/load
+                self.DEFAULT_GRAPH_FILE = file_path
+            except Exception as e:
+                QMessageBox.critical(self, "Load Error", f"Failed to load graph: {e}\n"
+                                    "Please ensure node classes are registered.")
+                print(f"[Main] Failed to load graph: {e}")
+        elif file_path: # If file_path was provided but didn't exist (e.g., first launch)
+            print(f"[Main] No graph file found at '{file_path}'. Starting with empty canvas.")
+        else: # User cancelled file dialog
+            print("[Main] Load operation cancelled.")
+
+    def saveGraphs(self):
+        try:
+            graph_data = self._graph.serialize_session()
+
+            with open(self.DEFAULT_GRAPH_FILE, 'w') as f:
+                json.dump(graph_data, f, indent=4)
+
+            print(f"[Main] Auto-saved graph to: {self.DEFAULT_GRAPH_FILE}")
+        except Exception as e:
+            print(f"[Main] Failed to auto-save graph on exit: {e}")
+
+    def closeEvent(self, event):
+        self._on_stop()
+        # Auto-save the current graph
+        self.saveGraphs() # Save the current graph before closing
+
+        listener.stop() # Stop pynput listener
+        listener.join() # Wait for listener thread to finish
+        super().closeEvent(event)
+        event.accept()
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4.8) Build File menu with New, Open, Save, Exit
+    # ──────────────────────────────────────────────────────────────────────────
+    def _build_file_menu(self):
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("File")
+
+        # New Action
+        new_action = QAction("New Graph", self)
+        new_action.triggered.connect(self._on_new_graph)
+        file_menu.addAction(new_action)
+
+        # Open Action
+        open_action = QAction("Open Graph...", self)
+        open_action.triggered.connect(lambda: self._on_load()) # No default file path
+        file_menu.addAction(open_action)
+
+        # Save Action
+        save_action = QAction("Save Graph...", self)
+        save_action.triggered.connect(self._on_save)
+        file_menu.addAction(save_action)
+
+        file_menu.addSeparator()
+
+        # Exit Action
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.5) Canvas right‐click context menu
