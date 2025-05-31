@@ -19,18 +19,17 @@ from PySide6.QtCore import Qt, QPointF, Signal, QObject, QTimer
 from NodeGraphQt import (
     NodeGraph,
     BaseNode,
-    PropertiesBinWidget,
     NodesPaletteWidget,
 )
 import PySide6
 import NodeGraphQt
 
-print(f"--- My Automation App Environment ---")
-print(f"Python version: {sys.version}")
-print(f"PySide6 version: {PySide6.__version__}")
-print(f"Qt version used by PySide6: {PySide6.QtCore.qVersion()}")
-print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
-print("------------------------------------")
+# print(f"--- DEBUG Environment Check ---")
+# print(f"Python version: {sys.version}")
+# print(f"PySide6 version: {PySide6.__version__}")
+# print(f"Qt version used by PySide6: {PySide6.QtCore.qVersion()}")
+# print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
+# print("------------------------------------")
 
 from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Controller as MouseController
@@ -76,7 +75,7 @@ listener = MouseListener(on_move=on_move)
 listener.start()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6) Screen Overlays
+# 0) Screen Overlays
 # ──────────────────────────────────────────────────────────────────────────────
 show_coords = False
 mouse_x, mouse_y = 0, 0
@@ -98,19 +97,28 @@ class Overlay(QWidget):
         self.hide()
 
     def update_text(self, x, y):
+        """
+        Update the overlay text with the current mouse coordinates.
+        """
         self.label.setText(f"X: {x}  Y: {y}")
         self.label.adjustSize()
         self.resize(self.label.size())
 
     def show_at_top_right(self):
+        """
+        Move the overlay to the top-right corner of the primary screen.
+        """
         screen_geometry = QApplication.primaryScreen().geometry()
         self.move(screen_geometry.width() - self.width(), 0)
         self.show()
 
 async def overlay_update_loop():
+    """
+    Main loop to update the overlay with mouse coordinates.
+    This runs asynchronously and updates the overlay every 50ms.
+    """
     overlay = Overlay()
 
-    # Timer to keep Qt event loop responsive
     timer = QTimer()
     timer.timeout.connect(lambda: None)
     timer.start(50)
@@ -123,7 +131,7 @@ async def overlay_update_loop():
         else:
             if overlay.isVisible():
                 overlay.hide()
-        await asyncio.sleep(0.05)  # update at ~20 FPS
+        await asyncio.sleep(0.05)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 1) Define “global” list of key names for KeyboardNode’s drop‐down.
@@ -163,7 +171,6 @@ class StartNode(BaseNode):
 
     def __init__(self):
         super(StartNode, self).__init__()
-        # Only an output socket (since “Start” sends its signal out)
         self.add_output('out')
 
     def process(self, **kwargs):
@@ -187,6 +194,8 @@ class EndNode(BaseNode):
         # Only an input socket (since “End” receives a signal)
         self.add_input('in')
 
+        #self.add_checkbox('loopable', 'Hard Stop', False)
+
     def process(self, **kwargs):
         """
         In a real engine, this would mark the loop’s end.
@@ -209,7 +218,7 @@ class DelayNode(BaseNode):
         self.add_input('in')
         self.add_output('out')
 
-        # Numeric field as text (we chunk it in process() for responsive pause/stop)
+        # Numeric field as text input
         self.add_text_input('delay', 'Delay (ms)')
         self.set_property('delay', '1000')
 
@@ -224,7 +233,7 @@ class DelayNode(BaseNode):
             ms_total = 0
 
         print(f"[DelayNode: {self.id}] Beginning {ms_total} ms delay.")
-        # Break into 100ms increments so we can see progress and respect stop/pause.
+        # Break into 100ms increments so we can see progress
         ms_done = 0
         while ms_done < ms_total:
             chunk = min(100, ms_total - ms_done)
@@ -414,6 +423,9 @@ class AutomationDesigner(QMainWindow):
         self._graph.show()
         self._on_load(file_path=self.DEFAULT_GRAPH_FILE)
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4.11) Delete nodes with Delete or Backspace key
+    # ──────────────────────────────────────────────────────────────────────────
     def keyPressEvent(self, event: QKeyEvent):
         # Check for Delete or Backspace key
         if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
@@ -430,8 +442,9 @@ class AutomationDesigner(QMainWindow):
                 event.accept()
                 return
         super(AutomationDesigner, self).keyPressEvent(event)
+    
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.7) Build toolbar with Play, Pause, Stop
+    # 4.12) Build toolbar with Play, Pause, Stop
     # ──────────────────────────────────────────────────────────────────────────
     def _build_toolbar(self):
         toolbar = QToolBar("Controls", self)
@@ -451,8 +464,9 @@ class AutomationDesigner(QMainWindow):
         self._stop_action = QAction("Stop", self)
         self._stop_action.triggered.connect(self._on_stop)
         toolbar.addAction(self._stop_action)
+     
     # ──────────────────────────────────────────────────────────────────────────
-    # Save/Load handlers
+    # 4.13) Save/Load handlers
     # ──────────────────────────────────────────────────────────────────────────
     def _on_new_graph(self):
         """
@@ -482,7 +496,6 @@ class AutomationDesigner(QMainWindow):
                     json.dump(graph_data, f, indent=4) # Using indent for readability in the JSON file
 
                 print(f"[Main] Graph saved to: {file_path}")
-                # Optionally, update DEFAULT_GRAPH_FILE for next auto-save/load
                 self.DEFAULT_GRAPH_FILE = file_path
             except Exception as e:
                 QMessageBox.critical(self, "Save Error", f"Failed to save graph: {e}")
@@ -492,10 +505,7 @@ class AutomationDesigner(QMainWindow):
     def _clear_all_nodes_fallback(self):
         """
         A fallback method to clear all nodes by iterating and removing them one by one.
-        This is used if standard methods like clear_nodes() or remove_all_nodes() are not available.
         """
-        # It's important to convert to a list because you're modifying the collection
-        # while iterating. If you don't, you'll get a RuntimeError for changing size during iteration.
         for node in list(self._graph.all_nodes()):
             self._graph.remove_node(node)
         print("[Main] All nodes cleared using fallback method.")
@@ -508,21 +518,19 @@ class AutomationDesigner(QMainWindow):
             file_path, _ = QFileDialog.getOpenFileName(self, "Open Graph",
                                                     self.DEFAULT_GRAPH_FILE,
                                                     "Graph Files (*.json);;All Files (*)")
-        if file_path and os.path.exists(file_path): # Check if file exists for auto-load
+        if file_path and os.path.exists(file_path):
             self._on_stop() # Stop any running loops before loading a new graph
             try:
-                # IMPORTANT: Before deserializing, you should clear existing nodes
-                # and ensure all custom node classes are registered (which you already do in __init__).
+                # IMPORTANT: Before deserializing, clear existing nodes
                 self._clear_all_nodes_fallback()
 
-                # CHANGED: Read the JSON file content into a dictionary
+                # Read the JSON file content into a dictionary
                 with open(file_path, 'r') as f:
                     graph_data = json.load(f)
 
                 # Deserialize the graph from the file
                 self._graph.deserialize_session(graph_data)
                 print(f"[Main] Graph loaded from: {file_path}")
-                # Optionally, update DEFAULT_GRAPH_FILE for next auto-save/load
                 self.DEFAULT_GRAPH_FILE = file_path
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", f"Failed to load graph: {e}\n"
@@ -555,7 +563,7 @@ class AutomationDesigner(QMainWindow):
         event.accept()
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.8) Build File menu with New, Open, Save, Exit
+    # 4.14) Build File menu with New, Open, Save, Exit
     # ──────────────────────────────────────────────────────────────────────────
     def _build_file_menu(self):
         menu_bar = self.menuBar()
@@ -584,7 +592,7 @@ class AutomationDesigner(QMainWindow):
         file_menu.addAction(exit_action)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.5) Canvas right‐click context menu
+    # 4.15) Canvas right‐click context menu
     # ──────────────────────────────────────────────────────────────────────────
     def _show_context_menu(self, view_pos):
         """
@@ -607,7 +615,7 @@ class AutomationDesigner(QMainWindow):
         menu.exec(self._view.mapToGlobal(view_pos))
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.6) Create + place a node by label
+    # 4.16) Create + place a node by label
     # ──────────────────────────────────────────────────────────────────────────
     def _create_node(self, node_label):
         """
@@ -629,7 +637,7 @@ class AutomationDesigner(QMainWindow):
         new_node.set_pos(self._last_scene_pos.x(), self._last_scene_pos.y())
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.8) PLAY, PAUSE, STOP handlers
+    # 4.17) PLAY, PAUSE, STOP handlers
     # ──────────────────────────────────────────────────────────────────────────
     def _on_play(self):
         """
@@ -690,7 +698,7 @@ class AutomationDesigner(QMainWindow):
         print("[Main] All loops stopped.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.9) Loop worker function (runs in its own thread per Start node)
+    # 4.18) Loop worker function (runs in its own thread per Start node)
     # ──────────────────────────────────────────────────────────────────────────
     def _run_loop(self, start_node, stop_event: threading.Event, pause_event: threading.Event):
         """
@@ -779,12 +787,12 @@ class AutomationDesigner(QMainWindow):
         print(f"[LoopWorker-{start_id}] Thread terminating.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.10) Receive a signal when each loop iteration finishes
+    # 4.19) Receive a signal when each loop iteration finishes
     # ──────────────────────────────────────────────────────────────────────────
     def _on_loop_iteration_finished(self, start_id: str):
         """
         Called in the GUI thread whenever a loop iteration completes for a Start node.
-        You can use this signal to update a UI counter, log, or visual indicator.
+        We can use this signal to update a UI counter, log, or visual indicator.
         """
         print(f"[Main] Loop iteration finished for Start Node {start_id}.")
 
