@@ -14,8 +14,8 @@ No more stacking items on top of your keyboard to hold a button down :)
 ---
 
 ## Screenshot
+![BAM GUI](https://github.com/user-attachments/assets/fa2d3c96-b5c6-4e52-9a79-82bcdd1a8887)
 
-![BAM GUI](./screenshots/interface.png)  
 *The current BAM interface*
 
 ---
