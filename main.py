@@ -11,9 +11,11 @@ from PySide6.QtWidgets import (
     QToolBar,
     QMessageBox,
     QFileDialog,
+    QWidget,
+    QLabel,
 )
 from PySide6.QtGui import QAction, QKeyEvent
-from PySide6.QtCore import Qt, QPointF, Signal, QObject
+from PySide6.QtCore import Qt, QPointF, Signal, QObject, QTimer
 from NodeGraphQt import (
     NodeGraph,
     BaseNode,
@@ -33,27 +35,95 @@ print("------------------------------------")
 from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Controller as MouseController
 from pynput.mouse import Button
-from pynput.keyboard import Listener, Key
+from pynput.keyboard import Key
+from pynput.keyboard import Listener as KeyboardListener
+from pynput.mouse import Listener as MouseListener
 
 keyboard = KeyboardController()
 mouse = MouseController()
 
+hard_start = False
 hard_stop = False
 
 def on_press(key):
+    global show_coords
     try:
         if key == Key.f1:
             print("F1 key pressed!")
+        if key == Key.f2:
+            print("F2 key pressed!")
+        elif key == Key.f3:
+            show_coords = not show_coords
     except AttributeError:
         pass
 
 def on_release(key):
-    global hard_stop
+    global hard_stop, hard_start
     if key == Key.f1:
+        hard_start = True
+    if key == Key.f2:
         hard_stop = True
+
+def on_move(x, y):
+    global mouse_x, mouse_y
+    mouse_x = x
+    mouse_y = y
     
-listener = Listener(on_press=on_press, on_release=on_release)
+listener = KeyboardListener(on_press=on_press, on_release=on_release)
 listener.start()
+
+listener = MouseListener(on_move=on_move)
+listener.start()
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 6) Screen Overlays
+# ──────────────────────────────────────────────────────────────────────────────
+show_coords = False
+mouse_x, mouse_y = 0, 0
+
+import asyncio
+class Overlay(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(
+            Qt.FramelessWindowHint |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.label = QLabel("", self)
+        self.label.setStyleSheet("color: white; background-color: rgba(0,0,0,0); font-size: 16px;")
+        self.label.move(0, 0)
+        self.resize(200, 30)
+        self.hide()
+
+    def update_text(self, x, y):
+        self.label.setText(f"X: {x}  Y: {y}")
+        self.label.adjustSize()
+        self.resize(self.label.size())
+
+    def show_at_top_right(self):
+        screen_geometry = QApplication.primaryScreen().geometry()
+        self.move(screen_geometry.width() - self.width(), 0)
+        self.show()
+
+async def overlay_update_loop():
+    overlay = Overlay()
+
+    # Timer to keep Qt event loop responsive
+    timer = QTimer()
+    timer.timeout.connect(lambda: None)
+    timer.start(50)
+
+    while True:
+        if show_coords:
+            overlay.update_text(mouse_x, mouse_y)
+            if not overlay.isVisible():
+                overlay.show_at_top_right()
+        else:
+            if overlay.isVisible():
+                overlay.hide()
+        await asyncio.sleep(0.05)  # update at ~20 FPS
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 1) Define “global” list of key names for KeyboardNode’s drop‐down.
@@ -721,8 +791,20 @@ class AutomationDesigner(QMainWindow):
 # ──────────────────────────────────────────────────────────────────────────────
 # 5) Bootstrap the QApplication
 # ──────────────────────────────────────────────────────────────────────────────
+from qasync import QEventLoop, asyncSlot
 if __name__ == '__main__':
+
     app = QApplication(sys.argv)
+
+    # Replace default event loop with qasync event loop
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+
     window = AutomationDesigner()
     window.show()
-    sys.exit(app.exec())
+
+    # Start the overlay async task
+    loop.create_task(overlay_update_loop())
+
+    with loop:
+        sys.exit(loop.run_forever())
