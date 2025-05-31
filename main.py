@@ -1,18 +1,3 @@
-"""
-main.py
-
-PySide6 + NodeGraphQt (“nodeeditor”) example with:
-  • Right-click → “Add Node” menu (Start / End / Delay / Keyboard / Mouse)
-  • A drop-down of most common key IDs in KeyboardNode
-  • PLAY | PAUSE | STOP toolbar at the top
-  • Proper graph traversal: Start → Delay → End using node.outputs()
-  • Chunked sleep in DelayNode to illustrate the delay and allow Pause/Stop mid-delay
-  • Debug prints to show exactly what connections each node has
-  • Uses node.id (attribute) and NodeGraph.all_nodes()
-  • Numeric fields remain text inputs (convert to int in process())
-  • Users can add multiple Start→…→End loops; each will run independently when PLAY is pressed
-"""
-
 import sys
 import threading
 import time
@@ -33,6 +18,31 @@ from NodeGraphQt import (
     NodesPaletteWidget,
 )
 
+from pynput.keyboard import Controller as KeyboardController
+from pynput.mouse import Controller as MouseController
+from pynput.mouse import Button
+from pynput.keyboard import Listener, Key
+
+keyboard = KeyboardController()
+mouse = MouseController()
+
+hard_stop = False
+
+def on_press(key):
+    try:
+        if key == Key.f1:
+            print("F1 key pressed!")
+    except AttributeError:
+        pass
+
+def on_release(key):
+    global hard_stop
+    if key == Key.f1:
+        hard_stop = True
+    
+listener = Listener(on_press=on_press, on_release=on_release)
+listener.start()
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 1) Define “global” list of key names for KeyboardNode’s drop‐down.
 # ──────────────────────────────────────────────────────────────────────────────
@@ -48,6 +58,14 @@ KEY_NAMES = [
     'Up', 'Down', 'Left', 'Right',
     'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
 ]
+
+mouse_button_map = {
+    "Left": Button.left,
+    "Right": Button.right,
+    "Center": Button.middle,
+    "Mouse4": Button.x1,  # Side button 1
+    "Mouse5": Button.x2,  # Side button 2
+}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -221,11 +239,17 @@ class MouseNode(BaseNode):
         except ValueError:
             ms = 0
         print(f"[MouseNode: {self.id}] Clicking at ({x}, {y}) with '{button}', hold {ms}ms")
-        # In a real implementation, you might use:
-        #    pyautogui.mouseDown(x, y, button=button.lower())
-        #    time.sleep(ms / 1000.0)
-        #    pyautogui.mouseUp(x, y, button=button.lower())
-        time.sleep(ms / 1000.0)
+
+        button_to_click = mouse_button_map.get(button)
+
+        if button_to_click:
+            mouse.position = (x, y)
+            mouse.press(button_to_click)
+            time.sleep(ms / 1000.0)
+            mouse.release(button_to_click)
+        else:
+            print(f"Button '{button}' not recognized")
+            
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -447,6 +471,12 @@ class AutomationDesigner(QMainWindow):
                 time.sleep(0.1)
 
             if stop_event.is_set():
+                break
+
+            global hard_stop
+            if hard_stop:
+                print(f"[LoopWorker-{start_id}] Hard stop triggered, exiting loop.")
+                hard_stop = False
                 break
 
             # 2) “Fire” the Start node
