@@ -1,0 +1,6 @@
+autosave_graph.json
+build/*
+builds/*
+dist/*
+saves/*
+main.spec
