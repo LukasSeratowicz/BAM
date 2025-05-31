@@ -17,6 +17,15 @@ from NodeGraphQt import (
     PropertiesBinWidget,
     NodesPaletteWidget,
 )
+import PySide6
+import NodeGraphQt
+
+print(f"--- My Automation App Environment ---")
+print(f"Python version: {sys.version}")
+print(f"PySide6 version: {PySide6.__version__}")
+print(f"Qt version used by PySide6: {PySide6.QtCore.qVersion()}")
+print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
+print("------------------------------------")
 
 from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Controller as MouseController
@@ -156,7 +165,6 @@ class KeyboardNode(BaseNode):
     """
     “Keyboard” action node:
       • key:      Combo (drop‐down of KEY_NAMES)
-      • modifier: Combo (None / Ctrl / Alt / Shift)
       • duration: Text input (ms to hold)
     """
     __identifier__ = 'Automation'
@@ -170,29 +178,25 @@ class KeyboardNode(BaseNode):
 
         # Drop‐down of key names
         self.add_combo_menu('key', 'Key', KEY_NAMES)
-        # Drop‐down for modifier keys
-        self.add_combo_menu('modifier', 'Modifier', ['None', 'Ctrl', 'Alt', 'Shift'])
         # Duration (ms) as text
         self.add_text_input('duration', 'Duration (ms)')
 
         # Defaults
         self.set_property('key', 'Enter')
-        self.set_property('modifier', 'None')
         self.set_property('duration', '100')
 
     def process(self, **kwargs):
         key = self.get_property('key')
-        modifier = self.get_property('modifier')
         try:
             ms = int(self.get_property('duration'))
         except ValueError:
             ms = 0
-        print(f"[KeyboardNode: {self.id}] Key='{key}', Modifier='{modifier}', Duration={ms}ms")
-        # In a real implementation, you might do:
-        #    if modifier != 'None': keyboard.press(modifier.lower())
-        #    keyboard.press_and_release(key.lower())
-        #    if modifier != 'None': keyboard.release(modifier.lower())
+        print(f"[KeyboardNode: {self.id}] Key='{key}', Duration={ms}ms")
+
+        keyboard.press(key.lower())
         time.sleep(ms / 1000.0)
+        keyboard.release(key.lower())
+
 
 
 class MouseNode(BaseNode):
@@ -251,15 +255,10 @@ class MouseNode(BaseNode):
             print(f"Button '{button}' not recognized")
             
 
-
 # ──────────────────────────────────────────────────────────────────────────────
 # 3) Simple signals for thread control
 # ──────────────────────────────────────────────────────────────────────────────
 class LoopController(QObject):
-    """
-    A small QObject to emit signals when loops start/stop.
-    """
-    # Signal emitted when a loop (for a given Start node ID) has ended one iteration.
     loop_iteration_finished = Signal(str)
 
 
@@ -410,8 +409,8 @@ class AutomationDesigner(QMainWindow):
             return
 
         for start_node in start_nodes:
-            start_id = start_node.id  # <-- use the attribute, not a call
-            # If there’s no running thread for this Start node, launch one
+            start_id = start_node.id
+            
             if start_id not in self._loop_threads or not self._loop_threads[start_id].is_alive():
                 stop_event = threading.Event()
                 pause_event = threading.Event()
@@ -426,6 +425,11 @@ class AutomationDesigner(QMainWindow):
                 self._loop_threads[start_id] = thread
                 thread.start()
                 print(f"[Main] Launched loop thread for Start Node {start_id}")
+            elif start_id in self._loop_pause_flags:
+                self._loop_pause_flags[start_id].clear()
+                print(f"[Main] Unpaused loop thread for Start Node {start_id}")
+            else:
+                print(f"[Main] Start Node {start_id} is already running and not in a pausable state (or not previously paused).")
 
     def _on_pause(self):
         """
