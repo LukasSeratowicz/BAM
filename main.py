@@ -302,13 +302,13 @@ class MouseNode(BaseNode):
         # Numeric coords as text inputs
         self.add_text_input('x', 'X Coordinate')
         self.add_text_input('y', 'Y Coordinate')
-        self.add_combo_menu('button', 'Button', ['Left', 'Right', 'Middle'])
+        self.add_combo_menu('button', 'Button', ['Move', 'Left', 'Right', 'Middle'])
         self.add_text_input('hold', 'Hold Time (ms)')
 
         # Defaults
         self.set_property('x', '0')
         self.set_property('y', '0')
-        self.set_property('button', 'Left')
+        self.set_property('button', 'Move')
         self.set_property('hold', '100')
 
     def process(self, **kwargs):
@@ -326,6 +326,10 @@ class MouseNode(BaseNode):
         except ValueError:
             ms = 0
         print(f"[MouseNode: {self.id}] Clicking at ({x}, {y}) with '{button}', hold {ms}ms")
+
+        if button == 'Move':
+            mouse.position = (x, y)
+            return
 
         button_to_click = mouse_button_map.get(button)
 
@@ -409,9 +413,6 @@ class AutomationDesigner(QMainWindow):
         # 4.10) Finally, show the NodeGraph’s window:
         self._graph.show()
         self._on_load(file_path=self.DEFAULT_GRAPH_FILE)
-
-
-
 
     def keyPressEvent(self, event: QKeyEvent):
         # Check for Delete or Backspace key
