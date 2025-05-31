@@ -261,12 +261,12 @@ class AutomationDesigner(QMainWindow):
         # 4.2) Set the NodeGraph’s central widget:
         self.setCentralWidget(self._graph.widget)
 
-        # 4.3) Add a “Properties” dock on the right:
-        self._properties_bin = PropertiesBinWidget(node_graph=self._graph)
-        properties_dock = QDockWidget('Properties', self)
-        properties_dock.setWidget(self._properties_bin)
-        properties_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        self.addDockWidget(Qt.RightDockWidgetArea, properties_dock)
+        # # 4.3) Add a “Properties” dock on the right:
+        # self._properties_bin = PropertiesBinWidget(node_graph=self._graph)
+        # properties_dock = QDockWidget('Properties', self)
+        # properties_dock.setWidget(self._properties_bin)
+        # properties_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        # self.addDockWidget(Qt.RightDockWidgetArea, properties_dock)
 
         # 4.4) Add a “Nodes Palette” dock on the left:
         self._nodes_palette = NodesPaletteWidget(node_graph=self._graph)
