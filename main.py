@@ -159,6 +159,12 @@ mouse_button_map = {
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# 1.1) Define colors for node highlighting and default color.
+# ──────────────────────────────────────────────────────────────────────────────
+NODE_HIGHLIGHT_COLOR = (34, 47, 61)  # light‐yellow (RGB)
+NODE_DEFAULT_COLOR   = (13, 18, 23)  # plain white (RGB)
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 2) Define custom nodes: StartNode, EndNode, DelayNode, KeyboardNode, MouseNode.
 # ──────────────────────────────────────────────────────────────────────────────
 class StartNode(BaseNode):
@@ -358,6 +364,7 @@ class MouseNode(BaseNode):
 # ──────────────────────────────────────────────────────────────────────────────
 class LoopController(QObject):
     loop_iteration_finished = Signal(str)
+    node_started = Signal(str)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -420,6 +427,7 @@ class AutomationDesigner(QMainWindow):
         # 4.1.9) A signal emitter if you need to hook back to the GUI when a loop iteration finishes:
         self._loop_controller = LoopController()
         self._loop_controller.loop_iteration_finished.connect(self._on_loop_iteration_finished)
+        self._loop_controller.node_started.connect(self._on_node_started)
 
         # 4.1.10) Finally, show the NodeGraph’s window:
         self._graph.show()
@@ -652,6 +660,12 @@ class AutomationDesigner(QMainWindow):
         For each Start node in the graph:
           • If it’s not already running, spawn a thread to run its loop.
         """
+        
+        r, g, b = NODE_DEFAULT_COLOR
+        for node in self._graph.all_nodes():
+            node.set_color(r, g, b)
+        self._last_highlighted_node = None
+
         # Find all StartNode instances using all_nodes()
         all_nodes = self._graph.all_nodes()
         start_nodes = [n for n in all_nodes if isinstance(n, StartNode)]
@@ -704,6 +718,12 @@ class AutomationDesigner(QMainWindow):
             pause_event.clear()
         print("[Main] All loops stopped.")
 
+        # Clear any existing highlight
+        r, g, b = NODE_DEFAULT_COLOR
+        for node in self._graph.all_nodes():
+            node.set_color(r, g, b)
+        self._last_highlighted_node = None
+
     # ──────────────────────────────────────────────────────────────────────────
     # 4.18) Loop worker function (runs in its own thread per Start node)
     # ──────────────────────────────────────────────────────────────────────────
@@ -736,6 +756,9 @@ class AutomationDesigner(QMainWindow):
                 hard_stop = False
                 break
 
+            # 1.2) Highlight the Start node that just started
+            self._loop_controller.node_started.emit(start_node.id)
+            
             # 2) “Fire” the Start node
             start_node.process()
 
@@ -772,6 +795,9 @@ class AutomationDesigner(QMainWindow):
                     print(f"[Debug] Could not find node with ID {next_node_id}")
                     break
 
+                # Highlight the next node that just started
+                self._loop_controller.node_started.emit(next_node.id)
+
                 # Call process() on the next node (DelayNode will sleep here)
                 next_node.process()
 
@@ -786,7 +812,10 @@ class AutomationDesigner(QMainWindow):
                 if current_node.get_property('repeat') == 'Single':
                     # Stop further looping:
                     stop_event.set()
-                    
+                elif current_node.get_property('repeat') == 'Repeat':
+                    # It is 'Repeat' → clear any existing highlight immediately
+                    self._loop_controller.node_started.emit('')
+
             # 4) We’ve either hit an EndNode or there were no further connections.
             #    Emit the loop‐finished signal for this StartNode:
             self._loop_controller.loop_iteration_finished.emit(start_id)
@@ -817,6 +846,37 @@ class AutomationDesigner(QMainWindow):
             print("[Main] Hard start detected! Starting automation.")
             self._on_play()
             hard_start = False
+
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4.21) Highlight the node that just started
+    # ──────────────────────────────────────────────────────────────────────────
+    def _on_node_started(self, node_id: str):
+        """
+        Highlight the node with id=node_id, and un‐highlight the previously running node.
+        """
+        if not node_id:
+            if hasattr(self, '_last_highlighted_node') and self._last_highlighted_node:
+                r, g, b = NODE_DEFAULT_COLOR
+                self._last_highlighted_node.set_color(r, g, b)
+                self._last_highlighted_node = None
+            return
+
+        # Otherwise, proceed to highlight the given node:
+        node = self._graph.get_node_by_id(node_id)
+        if not node:
+            return
+
+        # Restore previous node (if any) back to default color
+        if hasattr(self, '_last_highlighted_node') and self._last_highlighted_node:
+            prev = self._last_highlighted_node
+            r, g, b = NODE_DEFAULT_COLOR
+            prev.set_color(r, g, b)
+
+        # Highlight the newly started node (light yellow)
+        r, g, b = NODE_HIGHLIGHT_COLOR
+        node.set_color(r, g, b)
+        self._last_highlighted_node = node
 
 
 # ──────────────────────────────────────────────────────────────────────────────
