@@ -21,9 +21,12 @@ from NodeGraphQt import (
     BaseNode,
     NodesPaletteWidget,
 )
-import PySide6
-import NodeGraphQt
-
+from NodeGraphQt import (
+    NodeGraph,
+    BaseNode,
+    NodesPaletteWidget,
+    BackdropNode,
+)
 # print(f"--- DEBUG Environment Check ---")
 # print(f"Python version: {sys.version}")
 # print(f"PySide6 version: {PySide6.__version__}")
@@ -230,7 +233,7 @@ class DelayNode(BaseNode):
         self.add_text_input('delay', 'Delay (ms)')
         self.set_property('delay', '1000')
 
-    def process(self, **kwargs):
+    def process(self, stop_event=None, **kwargs):
         """
         Sleep for the specified number of milliseconds, in 100ms chunks,
         printing status each chunk so you see the delay happening.
@@ -244,6 +247,11 @@ class DelayNode(BaseNode):
         # Break into 100ms increments so we can see progress
         ms_done = 0
         while ms_done < ms_total:
+            
+            if stop_event and stop_event.is_set():
+                print(f"[DelayNode: {self.id}] Stopped early at {ms_done}/{ms_total} ms")
+                return
+            
             chunk = min(100, ms_total - ms_done)
             time.sleep(chunk / 1000.0)
             ms_done += chunk
@@ -379,6 +387,10 @@ class AutomationDesigner(QMainWindow):
         self.setWindowTitle('BAM - Big AutoMation by Lucas S. -- github.com/LukasSeratowicz/BAM')
         self.resize(1200, 800)
 
+        # 4.1.0) Initialize highlighted nodes and backdrops sets
+        self._highlighted_nodes = set()
+        self._highlighted_backdrops = set()
+
         # 4.1.1) Create the NodeGraph and register node types:
         self._graph = NodeGraph()
         self._graph.register_node(StartNode)
@@ -428,6 +440,8 @@ class AutomationDesigner(QMainWindow):
         self._loop_controller = LoopController()
         self._loop_controller.loop_iteration_finished.connect(self._on_loop_iteration_finished)
         self._loop_controller.node_started.connect(self._on_node_started)
+
+        self._last_highlighted_backdrop = None
 
         # 4.1.10) Finally, show the NodeGraph’s window:
         self._graph.show()
@@ -666,6 +680,9 @@ class AutomationDesigner(QMainWindow):
             node.set_color(r, g, b)
         self._last_highlighted_node = None
 
+        self._highlighted_nodes.clear()
+        self._highlighted_backdrops.clear()
+
         # Find all StartNode instances using all_nodes()
         all_nodes = self._graph.all_nodes()
         start_nodes = [n for n in all_nodes if isinstance(n, StartNode)]
@@ -722,7 +739,12 @@ class AutomationDesigner(QMainWindow):
         r, g, b = NODE_DEFAULT_COLOR
         for node in self._graph.all_nodes():
             node.set_color(r, g, b)
-        self._last_highlighted_node = None
+            if isinstance(node, BackdropNode):
+                node.update()
+
+        # Clear highlighted nodes and backdrops        
+        self._highlighted_nodes.clear()
+        self._highlighted_backdrops.clear()
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.18) Loop worker function (runs in its own thread per Start node)
@@ -754,7 +776,8 @@ class AutomationDesigner(QMainWindow):
             if hard_stop:
                 print(f"[LoopWorker-{start_id}] Hard stop triggered, exiting loop.")
                 hard_stop = False
-                break
+                QTimer.singleShot(0, self._on_stop)
+                return
 
             # 1.2) Highlight the Start node that just started
             self._loop_controller.node_started.emit(start_node.id)
@@ -799,8 +822,14 @@ class AutomationDesigner(QMainWindow):
                 self._loop_controller.node_started.emit(next_node.id)
 
                 # Call process() on the next node (DelayNode will sleep here)
-                next_node.process()
+                if isinstance(next_node, DelayNode):
+                    next_node.process(stop_event=stop_event)
+                else:
+                    next_node.process()
 
+                if stop_event.is_set():
+                    return
+                
                 # Move forward
                 current_node = next_node
 
@@ -809,12 +838,11 @@ class AutomationDesigner(QMainWindow):
                     break
 
             if isinstance(current_node, EndNode):
+                end_id = current_node.id
                 if current_node.get_property('repeat') == 'Single':
-                    # Stop further looping:
+                    # Emit a “clear” for this end node (and its backdrop), then stop loop
+                    self._loop_controller.node_started.emit(f"clear:{end_id}")
                     stop_event.set()
-                elif current_node.get_property('repeat') == 'Repeat':
-                    # It is 'Repeat' → clear any existing highlight immediately
-                    self._loop_controller.node_started.emit('')
 
             # 4) We’ve either hit an EndNode or there were no further connections.
             #    Emit the loop‐finished signal for this StartNode:
@@ -841,42 +869,95 @@ class AutomationDesigner(QMainWindow):
     # 4.20) Check for F1 - hard start
     # ──────────────────────────────────────────────────────────────────────────
     def _check_hard_start(self):
-        global hard_start
+        global hard_start, hard_stop
         if hard_start:
             print("[Main] Hard start detected! Starting automation.")
             self._on_play()
             hard_start = False
+        if hard_stop:
+            print("[Main] Hard stop detected! Stopping automation.")
+            self._on_stop()
+            hard_stop = False
 
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.21) Highlight the node that just started
     # ──────────────────────────────────────────────────────────────────────────
-    def _on_node_started(self, node_id: str):
+    def _on_node_started(self, msg: str):
         """
-        Highlight the node with id=node_id, and un‐highlight the previously running node.
+        If msg starts with "clear:", un-highlight that node & its backdrop only.
+        Otherwise msg is a node_id to highlight.
         """
-        if not node_id:
-            if hasattr(self, '_last_highlighted_node') and self._last_highlighted_node:
-                r, g, b = NODE_DEFAULT_COLOR
-                self._last_highlighted_node.set_color(r, g, b)
-                self._last_highlighted_node = None
+        # ─── CASE A: a clear‐request for a particular node/backdrop ───
+        if msg.startswith("clear:"):
+            _, nid = msg.split(":", 1)
+            # 1) Clear that node, if currently highlighted
+            if nid in self._highlighted_nodes:
+                node = self._graph.get_node_by_id(nid)
+                if node:
+                    r, g, b = NODE_DEFAULT_COLOR
+                    node.set_color(r, g, b)
+                    # no need to call update() for normal nodes
+                self._highlighted_nodes.remove(nid)
+
+            # 2) Also clear its enclosing backdrop, if any
+            #    We must find which backdrop contains that node
+            node = self._graph.get_node_by_id(nid)
+            if node:
+                for bp in self._graph.all_nodes():
+                    if isinstance(bp, BackdropNode):
+                        # if node is inside bp.nodes(), clear bp
+                        if node in bp.nodes():
+                            bid = bp.id
+                            if bid in self._highlighted_backdrops:
+                                r, g, b = NODE_DEFAULT_COLOR
+                                bp.set_color(r, g, b)
+                                bp.update()  # force redraw
+                                self._highlighted_backdrops.remove(bid)
+                            break
             return
 
-        # Otherwise, proceed to highlight the given node:
+        # ─── CASE B: a normal node_id to highlight ───
+        node_id = msg
         node = self._graph.get_node_by_id(node_id)
         if not node:
             return
 
-        # Restore previous node (if any) back to default color
-        if hasattr(self, '_last_highlighted_node') and self._last_highlighted_node:
-            prev = self._last_highlighted_node
-            r, g, b = NODE_DEFAULT_COLOR
-            prev.set_color(r, g, b)
+        # 1) Determine which backdrop (if any) contains this node:
+        current_bp = None
+        for bp in self._graph.all_nodes():
+            if isinstance(bp, BackdropNode) and node in bp.nodes():
+                current_bp = bp
+                break
 
-        # Highlight the newly started node (light yellow)
-        r, g, b = NODE_HIGHLIGHT_COLOR
-        node.set_color(r, g, b)
-        self._last_highlighted_node = node
+        # 2) Within that same backdrop, clear any previously highlighted node:
+        if current_bp:
+            to_remove = []
+            for old_nid in self._highlighted_nodes:
+                old_node = self._graph.get_node_by_id(old_nid)
+                if old_node and old_node in current_bp.nodes():
+                    # un‐highlight old_node
+                    r0, g0, b0 = NODE_DEFAULT_COLOR
+                    old_node.set_color(r0, g0, b0)
+                    to_remove.append(old_nid)
+            # remove cleared IDs from the set
+            for old_nid in to_remove:
+                self._highlighted_nodes.remove(old_nid)
+
+        # 3) Now highlight the new node (if not already):
+        if node_id not in self._highlighted_nodes:
+            r, g, b = NODE_HIGHLIGHT_COLOR
+            node.set_color(r, g, b)
+            self._highlighted_nodes.add(node_id)
+
+        # 4) Highlight the backdrop itself (once) if not already:
+        if current_bp:
+            bid = current_bp.id
+            if bid not in self._highlighted_backdrops:
+                r, g, b = NODE_HIGHLIGHT_COLOR
+                current_bp.set_color(r, g, b)
+                current_bp.update()
+                self._highlighted_backdrops.add(bid)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
