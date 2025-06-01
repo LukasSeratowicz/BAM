@@ -930,7 +930,8 @@ class AutomationDesigner(QMainWindow):
                 current_bp = bp
                 break
 
-        # 2) Within that same backdrop, clear any previously highlighted node:
+        # 2) If there is a backdrop, clear only its old highlighted member(s);
+        #    otherwise (no backdrop) clear all previously highlighted nodes.
         if current_bp:
             to_remove = []
             for old_nid in self._highlighted_nodes:
@@ -940,8 +941,15 @@ class AutomationDesigner(QMainWindow):
                     r0, g0, b0 = NODE_DEFAULT_COLOR
                     old_node.set_color(r0, g0, b0)
                     to_remove.append(old_nid)
-            # remove cleared IDs from the set
             for old_nid in to_remove:
+                self._highlighted_nodes.remove(old_nid)
+        else:
+            # no backdrop: clear every previously highlighted node
+            for old_nid in list(self._highlighted_nodes):
+                old_node = self._graph.get_node_by_id(old_nid)
+                if old_node:
+                    r0, g0, b0 = NODE_DEFAULT_COLOR
+                    old_node.set_color(r0, g0, b0)
                 self._highlighted_nodes.remove(old_nid)
 
         # 3) Now highlight the new node (if not already):
