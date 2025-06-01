@@ -195,13 +195,15 @@ class EndNode(BaseNode):
         self.add_input('in')
 
         #self.add_checkbox('loopable', 'Hard Stop', False)
+        self.add_combo_menu('repeat', 'Repeat', ['Single', 'Repeat'])
+        self.set_property('repeat', 'Repeat')
 
     def process(self, **kwargs):
         """
         In a real engine, this would mark the loop’s end.
         Here it’s stubbed just to show the ID.
         """
-        print(f"[EndNode: {self.id}] Reached.")
+        print(f"[EndNode: {self.id}] Reached. Repeat: {self.get_property('repeat')}")
 
 
 class DelayNode(BaseNode):
@@ -713,8 +715,9 @@ class AutomationDesigner(QMainWindow):
                b. Call start_node.process().
                c. Walk connections: from Start → next node → next → … until we hit an EndNode.
                    • At each node, call node.process(). DelayNode.process() will sleep.
-               d. Once we hit an EndNode, emit a “loop iteration finished” signal.
-               e. Loop back to Start (unless stopped).
+                d. Once we hit an EndNode, check its 'repeat' property: if 'Single', halt; if 'Repeat', continue.
+               e. Emit a “loop iteration finished” signal.
+               f. Loop back to Start (unless stop_event was set or 'Single' was chosen).
         """
         start_id = start_node.id
         print(f"[LoopWorker-{start_id}] Thread started.")
@@ -754,9 +757,7 @@ class AutomationDesigner(QMainWindow):
                     break
 
                 # Take the first output port
-                out_port = outputs[port_names[0]]
-
-                # See which ports are connected
+                out_port = current_node.outputs()[list(current_node.outputs().keys())[0]]
                 connected_ports = out_port.connected_ports()
                 print(f"[Debug] Traversal at node {current_node.id}, connected_ports: {connected_ports}")
 
@@ -781,6 +782,11 @@ class AutomationDesigner(QMainWindow):
                 if isinstance(current_node, EndNode):
                     break
 
+            if isinstance(current_node, EndNode):
+                if current_node.get_property('repeat') == 'Single':
+                    # Stop further looping:
+                    stop_event.set()
+                    
             # 4) We’ve either hit an EndNode or there were no further connections.
             #    Emit the loop‐finished signal for this StartNode:
             self._loop_controller.loop_iteration_finished.emit(start_id)
