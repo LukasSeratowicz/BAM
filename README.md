@@ -71,11 +71,12 @@ No more stacking items on top of your keyboard to hold a button down :)
 - [ ] Start Blocks now have Buttons to start this segment
 - [ ] fix F2: doesn't always stop all nodes from firing
 
-#### [Future Plan] **Release 0.1.6** - Copy Paste
+#### [In Progress] **Release 0.1.6** - Copy Paste
 - [ ] Add Ctrl+C and Ctrl+V to copy paste currently selected node/s
 
-#### [In Progress] **Release 0.1.5** - Code Rework
-- [ ] Refactor monolith code into a modular structure for development
+#### **Release 0.1.5** - Code Rework
+- Refactor monolith code into a modular structure for development
+- (no actual exe release, because no functional changes were implemented)
 
 #### **Release 0.1.4** - Visualisations Update
 - Nodes are now highlighted when active
