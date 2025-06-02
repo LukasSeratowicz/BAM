@@ -5,27 +5,29 @@ g.ensure_initialized()
 print("[DEBUG] shared/globals contains:", dir(g))
 
 import sys
-import os
-import json
 import threading
-import time
 import asyncio
+
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
-    QMenu,
     QDockWidget,
-    QToolBar,
-    QMessageBox,
-    QFileDialog,
 )
-from PySide6.QtGui import QAction, QKeyEvent
-from PySide6.QtCore import Qt, QPointF, Signal, QObject, QTimer
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtCore import Qt, QPointF, QTimer
 from NodeGraphQt import (
     NodeGraph,
     NodesPaletteWidget,
     BackdropNode,
 )
+
+# print(f"--- DEBUG Environment Check ---")
+# print(f"Python version: {sys.version}")
+# print(f"PySide6 version: {PySide6.__version__}")
+# print(f"Qt version used by PySide6: {PySide6.QtCore.qVersion()}")
+# print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
+# print("------------------------------------")
+
 
 from nodes.StartNode import StartNode
 from nodes.EndNode import EndNode
@@ -35,20 +37,29 @@ from nodes.MouseNode import MouseNode
 from handlers.Overlay import overlay_update_loop
 from handlers.LoopController import LoopController
 
-# print(f"--- DEBUG Environment Check ---")
-# print(f"Python version: {sys.version}")
-# print(f"PySide6 version: {PySide6.__version__}")
-# print(f"Qt version used by PySide6: {PySide6.QtCore.qVersion()}")
-# print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
-# print("------------------------------------")
-
 from handlers.KeyboardListener import keyboardListener
 keyboardListener.start()
 
 from handlers.MouseListener import mouseListener
 mouseListener.start()
 
-
+from AutomationDesigner.DeleteNodeEvent import deleteNodeEventHandler
+from AutomationDesigner.BuildToolbar import buildToolbarHandler
+from AutomationDesigner.OnNewGraphHandler import onNewGraphHandler
+from AutomationDesigner.OnSaveHandler import onSaveHandler
+from AutomationDesigner.ClearAllNodesFallbackHandler import clearAllNodesFallbackHandler
+from AutomationDesigner.OnLoadHandler import onLoadHandler
+from AutomationDesigner.SaveGraphsHandler import saveGraphsHandler
+from AutomationDesigner.BuildFileMenuHandler import buildFileMenuHandler
+from AutomationDesigner.ShowContextMenuHandler import showContextMenuHandler
+from AutomationDesigner.CreateNodeHandler import createNodeHandler
+from AutomationDesigner.OnPlayHandler import onPlayHandler
+from AutomationDesigner.OnPauseHandler import onPauseHandler
+from AutomationDesigner.OnStopHandler import onStopHandler
+from AutomationDesigner.RunLoopHandler import runLoopHandler
+from AutomationDesigner.OnLoopIterationFinishedHandler import onLoopIterationFinishedHandler
+from AutomationDesigner.CheckHardStartHandler import checkHardStartHandler
+from AutomationDesigner.OnNodeStartedHandler import onNodeStartedHandler
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STATIC VARIABLES
@@ -58,8 +69,9 @@ NODE_DEFAULT_COLOR   = (13, 18, 23)  # plain white (RGB)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 4) Main Application: QMainWindow with NodeGraph at the center, two docks,
+# Main Application: QMainWindow with NodeGraph at the center, dock on the left,
 #    plus a toolbar (Play | Pause | Stop) and a threaded loop “engine.”
+#    plus a File menu with New, Open, Save, Exit.
 # ──────────────────────────────────────────────────────────────────────────────
 class AutomationDesigner(QMainWindow):
     DEFAULT_GRAPH_FILE = "autosave_graph.json"
@@ -135,205 +147,62 @@ class AutomationDesigner(QMainWindow):
         self._hard_start_timer.start(33)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.11) Delete nodes with Delete or Backspace key
+    # 4.1) Delete nodes with Delete or Backspace key
     # ──────────────────────────────────────────────────────────────────────────
     def keyPressEvent(self, event: QKeyEvent):
-        # Check for Delete or Backspace key
-        if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
-            selected_nodes = self._graph.selected_nodes()
-            if selected_nodes:
-                confirm = QMessageBox.question(self, "Delete Nodes",
-                                            f"Are you sure you want to delete {len(selected_nodes)} selected node(s)?",
-                                            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                if confirm == QMessageBox.Yes:
-                    for node in selected_nodes:
-                        self._graph.remove_node(node)
-                    print(f"Deleted {len(selected_nodes)} node(s).")
-                    self.saveGraphs()
-                event.accept()
-                return
+        deleteNodeEventHandler(self, event)
         super(AutomationDesigner, self).keyPressEvent(event)
     
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.12) Build toolbar with Play, Pause, Stop
+    # 4.2) Build toolbar with Play, Pause, Stop
     # ──────────────────────────────────────────────────────────────────────────
     def _build_toolbar(self):
-        toolbar = QToolBar("Controls", self)
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
-
-        # Play button
-        self._play_action = QAction("Play", self)
-        self._play_action.triggered.connect(self._on_play)
-        toolbar.addAction(self._play_action)
-
-        # Pause button
-        self._pause_action = QAction("Pause", self)
-        self._pause_action.triggered.connect(self._on_pause)
-        toolbar.addAction(self._pause_action)
-
-        # Stop button
-        self._stop_action = QAction("Stop", self)
-        self._stop_action.triggered.connect(self._on_stop)
-        toolbar.addAction(self._stop_action)
-     
+        buildToolbarHandler(self)
+    
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.13) Save/Load handlers
+    # 4.3) Save/Load/New handlers
     # ──────────────────────────────────────────────────────────────────────────
     def _on_new_graph(self):
-        """
-        Clears the current graph and stops all running loops.
-        """
-        reply = QMessageBox.question(self, "New Graph",
-                                    "Are you sure you want to create a new graph? Any unsaved changes will be lost.",
-                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            self._on_stop() # Stop any running loops first
-            self._clear_all_nodes_fallback()
-            print("[Main] New graph created.")
+        onNewGraphHandler(self)
 
     def _on_save(self):
-        """
-        Saves the current graph to a JSON file.
-        """
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Graph",
-                                                 self.DEFAULT_GRAPH_FILE,
-                                                 "Graph Files (*.json);;All Files (*)")
-        if file_path:
-            try:
-                graph_data = self._graph.serialize_session()
-
-                # 2. Manually write the dictionary to the specified JSON file
-                with open(file_path, 'w') as f:
-                    json.dump(graph_data, f, indent=4) # Using indent for readability in the JSON file
-
-                print(f"[Main] Graph saved to: {file_path}")
-                self.DEFAULT_GRAPH_FILE = file_path
-            except Exception as e:
-                QMessageBox.critical(self, "Save Error", f"Failed to save graph: {e}")
-                print(f"[Main] Failed to save graph: {e}")
-
+        onSaveHandler(self)
 
     def _clear_all_nodes_fallback(self):
-        """
-        A fallback method to clear all nodes by iterating and removing them one by one.
-        """
-        for node in list(self._graph.all_nodes()):
-            self._graph.remove_node(node)
-        print("[Main] All nodes cleared using fallback method.")
+        clearAllNodesFallbackHandler(self)
 
     def _on_load(self, file_path=None):
-        """
-        Loads a graph from a JSON file. If file_path is None, a file dialog opens.
-        """
-        if file_path is None:
-            file_path, _ = QFileDialog.getOpenFileName(self, "Open Graph",
-                                                    self.DEFAULT_GRAPH_FILE,
-                                                    "Graph Files (*.json);;All Files (*)")
-        if file_path and os.path.exists(file_path):
-            self._on_stop() # Stop any running loops before loading a new graph
-            try:
-                # IMPORTANT: Before deserializing, clear existing nodes
-                self._clear_all_nodes_fallback()
-
-                # Read the JSON file content into a dictionary
-                with open(file_path, 'r') as f:
-                    graph_data = json.load(f)
-
-                # Deserialize the graph from the file
-                self._graph.deserialize_session(graph_data)
-                print(f"[Main] Graph loaded from: {file_path}")
-                self.DEFAULT_GRAPH_FILE = file_path
-            except Exception as e:
-                QMessageBox.critical(self, "Load Error", f"Failed to load graph: {e}\n"
-                                    "Please ensure node classes are registered.")
-                print(f"[Main] Failed to load graph: {e}")
-        elif file_path: # If file_path was provided but didn't exist (e.g., first launch)
-            print(f"[Main] No graph file found at '{file_path}'. Starting with empty canvas.")
-        else: # User cancelled file dialog
-            print("[Main] Load operation cancelled.")
+        onLoadHandler(self, file_path)
 
     def saveGraphs(self):
-        try:
-            graph_data = self._graph.serialize_session()
-
-            with open(self.DEFAULT_GRAPH_FILE, 'w') as f:
-                json.dump(graph_data, f, indent=4)
-
-            print(f"[Main] Auto-saved graph to: {self.DEFAULT_GRAPH_FILE}")
-        except Exception as e:
-            print(f"[Main] Failed to auto-save graph on exit: {e}")
+        saveGraphsHandler(self)
 
     def closeEvent(self, event):
         self._on_stop()
-        # Auto-save the current graph
-        self.saveGraphs() # Save the current graph before closing
-
-        mouseListener.stop() # Stop pynput listener
-        keyboardListener.stop() # Stop pynput listener
-        mouseListener.join() # Wait for listener thread to finish
-        keyboardListener.join() # Wait for listener thread to finish
+        self.saveGraphs()
+        mouseListener.stop()
+        keyboardListener.stop()
+        mouseListener.join()
+        keyboardListener.join()
         super().closeEvent(event)
         event.accept()
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.14) Build File menu with New, Open, Save, Exit
+    # 4.4) Build File menu with New, Open, Save, Exit
     # ──────────────────────────────────────────────────────────────────────────
     def _build_file_menu(self):
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("File")
-
-        # New Action
-        new_action = QAction("New Graph", self)
-        new_action.triggered.connect(self._on_new_graph)
-        file_menu.addAction(new_action)
-
-        # Open Action
-        open_action = QAction("Open Graph...", self)
-        open_action.triggered.connect(lambda: self._on_load()) # No default file path
-        file_menu.addAction(open_action)
-
-        # Save Action
-        save_action = QAction("Save Graph...", self)
-        save_action.triggered.connect(self._on_save)
-        file_menu.addAction(save_action)
-
-        file_menu.addSeparator()
-
-        # Exit Action
-        exit_action = QAction("Exit", self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-
+        buildFileMenuHandler(self)
+    
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.15) Canvas right‐click context menu
+    # 4.5) Canvas right‐click context menu
     # ──────────────────────────────────────────────────────────────────────────
     def _show_context_menu(self, view_pos):
-        """
-        Called when the user right-clicks on the canvas.
-        Pop up a menu: Add Node → {Start, End, Delay, Keyboard, Mouse}.
-        """
-        # Convert VIEW coords → SCENE coords so new node appears where clicked:
-        self._last_scene_pos = self._view.mapToScene(view_pos)
-
-        # Build the context menu
-        menu = QMenu()
-        add_menu = menu.addMenu('Add Node')
-
-        # Add each node type
-        for node_label in ['Start', 'End', 'Delay', 'Keyboard', 'Mouse']:
-            action = add_menu.addAction(node_label)
-            action.triggered.connect(lambda checked=False, nl=node_label: self._create_node(nl))
-
-        # Show at the global position
-        menu.exec(self._view.mapToGlobal(view_pos))
+        showContextMenuHandler(self, view_pos)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.16) Create + place a node by label
+    # 4.6) Create + place a node by label
     # ──────────────────────────────────────────────────────────────────────────
     def _create_node(self, node_label):
-        """
-        Instantiate a node by its label and add it to the graph at the last click position.
-        """
         node_map = {
             'Start': StartNode,
             'End': EndNode,
@@ -341,315 +210,45 @@ class AutomationDesigner(QMainWindow):
             'Keyboard': KeyboardNode,
             'Mouse': MouseNode
         }
-        NodeClass = node_map.get(node_label)
-        if NodeClass is None:
-            return
-
-        new_node = NodeClass()
-        self._graph.add_node(new_node)
-        new_node.set_pos(self._last_scene_pos.x(), self._last_scene_pos.y())
+        createNodeHandler(self, node_label, node_map)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.17) PLAY, PAUSE, STOP handlers
+    # 4.7) PLAY, PAUSE, STOP handlers
     # ──────────────────────────────────────────────────────────────────────────
     def _on_play(self):
-        """
-        Called when the user clicks ‘Play’.  
-        For each Start node in the graph:
-          • If it’s not already running, spawn a thread to run its loop.
-        """
-        
-        r, g, b = NODE_DEFAULT_COLOR
-        for node in self._graph.all_nodes():
-            node.set_color(r, g, b)
-        self._last_highlighted_node = None
-
-        self._highlighted_nodes.clear()
-        self._highlighted_backdrops.clear()
-
-        # Find all StartNode instances using all_nodes()
-        all_nodes = self._graph.all_nodes()
-        start_nodes = [n for n in all_nodes if isinstance(n, StartNode)]
-
-        if not start_nodes:
-            QMessageBox.warning(self, "No Start Node", "Please add at least one Start node before playing.")
-            return
-
-        for start_node in start_nodes:
-            start_id = start_node.id
-            
-            if start_id not in self._loop_threads or not self._loop_threads[start_id].is_alive():
-                stop_event = threading.Event()
-                pause_event = threading.Event()
-                self._loop_stop_flags[start_id] = stop_event
-                self._loop_pause_flags[start_id] = pause_event
-
-                thread = threading.Thread(
-                    target=self._run_loop,
-                    args=(start_node, stop_event, pause_event),
-                    daemon=True
-                )
-                self._loop_threads[start_id] = thread
-                thread.start()
-                print(f"[Main] Launched loop thread for Start Node {start_id}")
-            elif start_id in self._loop_pause_flags:
-                self._loop_pause_flags[start_id].clear()
-                print(f"[Main] Unpaused loop thread for Start Node {start_id}")
-            else:
-                print(f"[Main] Start Node {start_id} is already running and not in a pausable state (or not previously paused).")
+        onPlayHandler(self, NODE_DEFAULT_COLOR, StartNode)
 
     def _on_pause(self):
-        """
-        Called when the user clicks ‘Pause’.  
-        This sets the pause flag for all running loops.
-        """
-        for start_id, pause_event in self._loop_pause_flags.items():
-            pause_event.set()
-        print("[Main] All loops paused. (will resume when Play is clicked again)")
+        onPauseHandler(self)
 
     def _on_stop(self):
-        """
-        Called when the user clicks ‘Stop’.  
-        This sets the stop flag for all running loops, and clears pause flags.
-        """
-        for start_id, stop_event in self._loop_stop_flags.items():
-            stop_event.set()
-        # Clear pause flags as well
-        for start_id, pause_event in self._loop_pause_flags.items():
-            pause_event.clear()
-        print("[Main] All loops stopped.")
-
-        # Clear any existing highlight
-        r, g, b = NODE_DEFAULT_COLOR
-        for node in self._graph.all_nodes():
-            node.set_color(r, g, b)
-            if isinstance(node, BackdropNode):
-                node.update()
-
-        # Clear highlighted nodes and backdrops        
-        self._highlighted_nodes.clear()
-        self._highlighted_backdrops.clear()
+        onStopHandler(self, NODE_DEFAULT_COLOR, BackdropNode)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.18) Loop worker function (runs in its own thread per Start node)
+    # 4.8) Loop worker function (runs in its own thread per Start node)
     # ──────────────────────────────────────────────────────────────────────────
     def _run_loop(self, start_node, stop_event: threading.Event, pause_event: threading.Event):
-        """
-        Proper graph traversal for a simple chain:
-          1. While not stopped:
-               a. Wait if paused.
-               b. Call start_node.process().
-               c. Walk connections: from Start → next node → next → … until we hit an EndNode.
-                   • At each node, call node.process(). DelayNode.process() will sleep.
-                d. Once we hit an EndNode, check its 'repeat' property: if 'Single', halt; if 'Repeat', continue.
-               e. Emit a “loop iteration finished” signal.
-               f. Loop back to Start (unless stop_event was set or 'Single' was chosen).
-        """
-        start_id = start_node.id
-        print(f"[LoopWorker-{start_id}] Thread started.")
-
-        while not stop_event.is_set():
-            # 1) Handle Pause: if pause_event is set, wait until it’s cleared
-            while pause_event.is_set() and not stop_event.is_set():
-                time.sleep(0.1)
-
-            if stop_event.is_set():
-                break
-
-            if g.hard_stop:
-                print(f"[LoopWorker-{start_id}] Hard stop triggered, exiting loop.")
-                g.hard_stop = False
-                QTimer.singleShot(0, self._on_stop)
-                return
-
-            # 1.2) Highlight the Start node that just started
-            self._loop_controller.node_started.emit(start_node.id)
-            
-            # 2) “Fire” the Start node
-            start_node.process()
-
-            # 3) Traverse the graph from StartNode → … → EndNode
-            current_node = start_node
-
-            while True:
-                # If current_node is already an EndNode, break out
-                if isinstance(current_node, EndNode):
-                    break
-
-                # Get all output ports (as a dict: { port_name: port_obj, ... })
-                outputs = current_node.outputs()
-                port_names = list(outputs.keys())
-                print(f"[Debug] Node {current_node.id} output ports: {port_names}")
-
-                if not port_names:
-                    # No outputs → stop traversal
-                    break
-
-                # Take the first output port
-                out_port = current_node.outputs()[list(current_node.outputs().keys())[0]]
-                connected_ports = out_port.connected_ports()
-                print(f"[Debug] Traversal at node {current_node.id}, connected_ports: {connected_ports}")
-
-                if not connected_ports:
-                    # No outgoing connections → stop
-                    break
-
-                # Take the first connection: (next_node_id, next_port_name)
-                next_node = connected_ports[0].node()
-                next_node_id = next_node.id
-                if next_node is None:
-                    print(f"[Debug] Could not find node with ID {next_node_id}")
-                    break
-
-                # Highlight the next node that just started
-                self._loop_controller.node_started.emit(next_node.id)
-
-                # Call process() on the next node (DelayNode will sleep here)
-                if isinstance(next_node, DelayNode):
-                    next_node.process(stop_event=stop_event)
-                else:
-                    next_node.process()
-
-                if stop_event.is_set():
-                    return
-                
-                # Move forward
-                current_node = next_node
-
-                # If we’ve reached an EndNode, stop the inner loop
-                if isinstance(current_node, EndNode):
-                    break
-
-            if isinstance(current_node, EndNode):
-                end_id = current_node.id
-                if current_node.get_property('repeat') == 'Single':
-                    # Emit a “clear” for this end node (and its backdrop), then stop loop
-                    self._loop_controller.node_started.emit(f"clear:{end_id}")
-                    stop_event.set()
-
-            # 4) We’ve either hit an EndNode or there were no further connections.
-            #    Emit the loop‐finished signal for this StartNode:
-            self._loop_controller.loop_iteration_finished.emit(start_id)
-
-            # 5) Immediately loop back to Start, unless stop_event was set
-            if stop_event.is_set():
-                break
-
-        print(f"[LoopWorker-{start_id}] Thread terminating.")
+        runLoopHandler(self, start_node, stop_event, pause_event, EndNode, DelayNode)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.19) Receive a signal when each loop iteration finishes
+    # 4.9) Receive a signal when each loop iteration finishes
     # ──────────────────────────────────────────────────────────────────────────
     def _on_loop_iteration_finished(self, start_id: str):
-        """
-        Called in the GUI thread whenever a loop iteration completes for a Start node.
-        We can use this signal to update a UI counter, log, or visual indicator.
-        """
-        print(f"[Main] Loop iteration finished for Start Node {start_id}.")
+        onLoopIterationFinishedHandler(self, start_id)
 
         
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.20) Check for F1 - hard start
+    # 4.10) Check for F1 - hard start
     # ──────────────────────────────────────────────────────────────────────────
     def _check_hard_start(self):
-        #print("Checking hard_start:", g.hard_start)
-        #print("Checking hard_stop:", g.hard_stop)
-        if g.hard_start:
-            print("[Main] Hard start detected! Starting automation.")
-            self._on_play()
-            g.hard_start = False
-        if g.hard_stop:
-            print("[Main] Hard stop detected! Stopping automation.")
-            self._on_stop()
-            g.hard_stop = False
+        checkHardStartHandler(self)
 
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.21) Highlight the node that just started
     # ──────────────────────────────────────────────────────────────────────────
     def _on_node_started(self, msg: str):
-        """
-        If msg starts with "clear:", un-highlight that node & its backdrop only.
-        Otherwise msg is a node_id to highlight.
-        """
-        # ─── CASE A: a clear‐request for a particular node/backdrop ───
-        if msg.startswith("clear:"):
-            _, nid = msg.split(":", 1)
-            # 1) Clear that node, if currently highlighted
-            if nid in self._highlighted_nodes:
-                node = self._graph.get_node_by_id(nid)
-                if node:
-                    r, g, b = NODE_DEFAULT_COLOR
-                    node.set_color(r, g, b)
-                    # no need to call update() for normal nodes
-                self._highlighted_nodes.remove(nid)
-
-            # 2) Also clear its enclosing backdrop, if any
-            #    We must find which backdrop contains that node
-            node = self._graph.get_node_by_id(nid)
-            if node:
-                for bp in self._graph.all_nodes():
-                    if isinstance(bp, BackdropNode):
-                        # if node is inside bp.nodes(), clear bp
-                        if node in bp.nodes():
-                            bid = bp.id
-                            if bid in self._highlighted_backdrops:
-                                r, g, b = NODE_DEFAULT_COLOR
-                                bp.set_color(r, g, b)
-                                bp.update()  # force redraw
-                                self._highlighted_backdrops.remove(bid)
-                            break
-            return
-
-        # ─── CASE B: a normal node_id to highlight ───
-        node_id = msg
-        node = self._graph.get_node_by_id(node_id)
-        if not node:
-            return
-
-        # 1) Determine which backdrop (if any) contains this node:
-        current_bp = None
-        for bp in self._graph.all_nodes():
-            if isinstance(bp, BackdropNode) and node in bp.nodes():
-                current_bp = bp
-                break
-
-        # 2) If there is a backdrop, clear only its old highlighted member(s);
-        #    otherwise (no backdrop) clear all previously highlighted nodes.
-        if current_bp:
-            to_remove = []
-            for old_nid in self._highlighted_nodes:
-                old_node = self._graph.get_node_by_id(old_nid)
-                if old_node and old_node in current_bp.nodes():
-                    # un‐highlight old_node
-                    r0, g0, b0 = NODE_DEFAULT_COLOR
-                    old_node.set_color(r0, g0, b0)
-                    to_remove.append(old_nid)
-            for old_nid in to_remove:
-                self._highlighted_nodes.remove(old_nid)
-        else:
-            # no backdrop: clear every previously highlighted node
-            for old_nid in list(self._highlighted_nodes):
-                old_node = self._graph.get_node_by_id(old_nid)
-                if old_node:
-                    r0, g0, b0 = NODE_DEFAULT_COLOR
-                    old_node.set_color(r0, g0, b0)
-                self._highlighted_nodes.remove(old_nid)
-
-        # 3) Now highlight the new node (if not already):
-        if node_id not in self._highlighted_nodes:
-            r, g, b = NODE_HIGHLIGHT_COLOR
-            node.set_color(r, g, b)
-            self._highlighted_nodes.add(node_id)
-
-        # 4) Highlight the backdrop itself (once) if not already:
-        if current_bp:
-            bid = current_bp.id
-            if bid not in self._highlighted_backdrops:
-                r, g, b = NODE_HIGHLIGHT_COLOR
-                current_bp.set_color(r, g, b)
-                current_bp.update()
-                self._highlighted_backdrops.add(bid)
+        onNodeStartedHandler(self, msg, NODE_DEFAULT_COLOR, NODE_HIGHLIGHT_COLOR, BackdropNode)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
