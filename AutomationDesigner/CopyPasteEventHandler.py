@@ -1,9 +1,9 @@
 # AutomationDesigner/CopyPasteEventHandler.py
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+
 
 def copyPasteEventHandler(self, event):
-    # Check for Ctrl+C (copy) or Ctrl+V (paste)
     if event.modifiers() == Qt.ControlModifier:
         if event.key() == Qt.Key.Key_C:
             self.copySelectedNodes()
@@ -19,56 +19,101 @@ def copyPasteEventHandler(self, event):
 def copySelectedNodesHandler(self):
     selected = self._graph.selected_nodes()
     if not selected:
-        print("[Main] No nodes selected for copy.")
+        print("[Main_Copy] No nodes selected for copy.")
         return
 
-    # Erase any previous clipboard contents:
     self._clipboard = []
-
-    # For each selected node, store (original, one‐time copy) pair:
     for node in selected:
-        copied_node = node.copy()
-        self._clipboard.append((node, copied_node))
-
-    print(f"[Main] Copied {len(self._clipboard)} node(s).")
+        # Corrected line: node.id is an attribute, not a method
+        if hasattr(node, 'copy') and callable(node.copy):
+            entry = node.copy()
+            self._clipboard.append(entry)
+        else:
+            print(f"[Main_Copy] ERROR: Node {node.id} has no 'copy' method!") # Corrected here too
 
 def pasteSelectedNodesHandler(self):
-    if not getattr(self, "_clipboard", None):
-        print("[Main] Clipboard is empty. Nothing to paste.")
+    if not getattr(self, "_clipboard", None) or not self._clipboard:
+        print("[Main_Paste] Clipboard is empty. Nothing to paste.")
         return
 
-    # 1) Insert each copied_node into the graph.
-    for orig, copied_node in self._clipboard:
-        self._graph.add_node(copied_node)
-        print(f"[Main] Pasted node: {copied_node.id}")
+    orig_to_new = {}
+    newly_created_nodes_for_props = []
 
-    # 2) Build a mapping: original_id → new_copy_instance
-    orig_to_new = { orig.id: new for (orig, new) in self._clipboard }
+    for i, (orig_id, NodeClass, props_from_copy, (x_orig, y_orig)) in enumerate(self._clipboard):
+        new_node = NodeClass()
+        self._graph.add_node(new_node)
+        new_pos_x, new_pos_y = x_orig + 20, y_orig + 20
+        new_node.set_pos(new_pos_x, new_pos_y)
+        orig_to_new[orig_id] = new_node
+        newly_created_nodes_for_props.append({'node': new_node, 'props': props_from_copy, 'orig_id': orig_id})
 
-    # 3) For each (orig, new_node), walk orig.output_ports() and reconnect:
-    for orig, new_node in self._clipboard:
-        # out_port is a Port object on the original node
-        for out_port in orig.output_ports():
-            # connected_ports() returns a list of Port objects to which out_port is connected
-            for dest_port in out_port.connected_ports():
-                dest_node = dest_port.node()
-                # Only rewire if dest_node was also in the original selection
-                if dest_node.id in orig_to_new:
-                    new_dest = orig_to_new[dest_node.id]
+    if not newly_created_nodes_for_props:
+        print("[Main_Paste] No nodes were actually created from clipboard. Aborting property/connection setting.")
+        return
+        
+    def apply_all_properties():
+        for item_idx, item in enumerate(newly_created_nodes_for_props):
+            node_to_set = item['node']
+            copied_props = item['props']
 
-                    # Get the matching Port objects on the new copies:
-                    new_src_port = new_node.get_output(out_port.name())
-                    new_dst_port = new_dest.get_input(dest_port.name())
+            for name, val in copied_props.items():
+                try:
+                    if name in ['id', 'pos', 'selected', 'type_']:
+                        continue
 
-                    # Now recreate the connection
-                    new_src_port.connect_to(new_dst_port)
+                    if hasattr(node_to_set, f'set_{name}'): # Check for specific setter first
+                        setter_method = getattr(node_to_set, f'set_{name}')
+                        if name == 'color' and isinstance(val, list) and (len(val) == 3 or len(val) == 4):
+                            try:
+                                setter_method(*val) # Unpack list for r,g,b or r,g,b,a
+                            except Exception as e_color_specific:
+                                node_to_set.set_property(name, val, push_undo=False)
+                        else:
+                            setter_method(val)
+                    else:
+                        node_to_set.set_property(name, val, push_undo=False) # ALWAYS NO widget=True
 
-    print(f"[Main] Recreated connections among pasted nodes.")
+                except Exception as e_main_set:
+                    import traceback
+                    traceback.print_exc()
 
-    # 4) Reselect newly pasted nodes as a group
-    new_nodes = [new for (_, new) in self._clipboard]
-    self._graph.clear_selection()
-    for n in new_nodes:
-        n.set_selected(True)
+    QTimer.singleShot(0, apply_all_properties)
 
-    print(f"[Main] Finished pasting {len(self._clipboard)} node(s).")
+    print("[Main_Paste] Rebuilding connections...")
+    for orig_id_conn, _, props_conn, _ in self._clipboard:
+        try:
+            original_node_in_graph = next(n for n in self._graph.all_nodes() if n.id == orig_id_conn)
+            newly_pasted_node_equivalent = orig_to_new[orig_id_conn]
+
+            for out_port in original_node_in_graph.output_ports():
+                for original_dest_port in out_port.connected_ports():
+                    original_dest_node_id = original_dest_port.node().id
+                    
+                    if original_dest_node_id in orig_to_new: # Was this destination also copied?
+                        new_source_node_for_conn = newly_pasted_node_equivalent
+                        new_dest_node_for_conn = orig_to_new[original_dest_node_id]
+                        
+                        new_src_port = new_source_node_for_conn.get_output(out_port.name())
+                        new_dst_port = new_dest_node_for_conn.get_input(original_dest_port.name())
+
+                        if new_src_port and new_dst_port:
+                            new_src_port.connect_to(new_dst_port)
+                        else:
+                            print(f"        ERROR: Could not find new source/dest ports ('{out_port.name()}' or '{original_dest_port.name()}').")
+                    else:
+                        print(f"      Skipping connection: Original destination node {original_dest_node_id} was not part of this paste operation.")
+        except StopIteration:
+            print(f"  [Main_Paste] Warning: Original node with ID {orig_id_conn} not found in current graph for connection rebuilding.")
+        except Exception as e_conn:
+            print(f"  [Main_Paste] Error during connection rebuilding for original ID {orig_id_conn}: {e_conn}")
+            import traceback
+            traceback.print_exc()
+    print("[Main_Paste] Finished rebuilding connections.")
+
+    new_nodes_instances = list(orig_to_new.values())
+    if new_nodes_instances:
+        self._graph.clear_selection()
+        for n_instance in new_nodes_instances:
+            n_instance.set_selected(True)
+        
+    print(f"[Main_Paste] Finished pasting {len(new_nodes_instances)} node(s) overall.")
