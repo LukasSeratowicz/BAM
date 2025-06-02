@@ -106,7 +106,8 @@ class AutomationDesigner(QMainWindow):
     def __init__(self):
         super(AutomationDesigner, self).__init__()
 
-        self.setWindowTitle('BAM - Big AutoMation by Lucas S. -- github.com/LukasSeratowicz/BAM')
+        title = "BAM " + g.version + "- Big AutoMation by Lucas S. -- github.com/LukasSeratowicz/BAM"
+        self.setWindowTitle(title)
         self.resize(1200, 800)
 
         # 4.1.0) Initialize highlighted nodes and backdrops sets
