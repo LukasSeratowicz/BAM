@@ -1,7 +1,7 @@
 # AutomationDesigner/CopyPasteEventHandler.py
 
 from PySide6.QtCore import Qt, QTimer
-
+import traceback
 
 def copyPasteEventHandler(self, event):
     if event.modifiers() == Qt.ControlModifier:
@@ -48,7 +48,7 @@ def pasteSelectedNodesHandler(self):
         newly_created_nodes_for_props.append({'node': new_node, 'props': props_from_copy, 'orig_id': orig_id})
 
     if not newly_created_nodes_for_props:
-        print("[Main_Paste] No nodes were actually created from clipboard. Aborting property/connection setting.")
+        print("[Main_Paste] No nodes were actually created from clipboard.")
         return
         
     def apply_all_properties():
@@ -61,26 +61,22 @@ def pasteSelectedNodesHandler(self):
                     if name in ['id', 'pos', 'selected', 'type_']:
                         continue
 
-                    if hasattr(node_to_set, f'set_{name}'): # Check for specific setter first
+                    if name == 'color':
+                        if isinstance(val, (list, tuple)) and len(val) in (3, 4) and all(isinstance(x, int) for x in val):
+                            color_list_to_set = list(val)
+                            node_to_set.set_property(name, color_list_to_set, push_undo=False)
+                    elif hasattr(node_to_set, f'set_{name}'):
                         setter_method = getattr(node_to_set, f'set_{name}')
-                        if name == 'color' and isinstance(val, list) and (len(val) == 3 or len(val) == 4):
-                            try:
-                                setter_method(*val) # Unpack list for r,g,b or r,g,b,a
-                            except Exception as e_color_specific:
-                                node_to_set.set_property(name, val, push_undo=False)
-                        else:
-                            setter_method(val)
+                        setter_method(val)
                     else:
-                        node_to_set.set_property(name, val, push_undo=False) # ALWAYS NO widget=True
-
-                except Exception as e_main_set:
-                    import traceback
-                    traceback.print_exc()
+                        node_to_set.set_property(name, val, push_undo=False)
+                except Exception:
+                    traceback.print_exc() 
 
     QTimer.singleShot(0, apply_all_properties)
 
-    print("[Main_Paste] Rebuilding connections...")
-    for orig_id_conn, _, props_conn, _ in self._clipboard:
+    # Connection Rebuilding 
+    for orig_id_conn, _, _, _ in self._clipboard:
         try:
             original_node_in_graph = next(n for n in self._graph.all_nodes() if n.id == orig_id_conn)
             newly_pasted_node_equivalent = orig_to_new[orig_id_conn]
@@ -89,7 +85,7 @@ def pasteSelectedNodesHandler(self):
                 for original_dest_port in out_port.connected_ports():
                     original_dest_node_id = original_dest_port.node().id
                     
-                    if original_dest_node_id in orig_to_new: # Was this destination also copied?
+                    if original_dest_node_id in orig_to_new: 
                         new_source_node_for_conn = newly_pasted_node_equivalent
                         new_dest_node_for_conn = orig_to_new[original_dest_node_id]
                         
@@ -98,22 +94,12 @@ def pasteSelectedNodesHandler(self):
 
                         if new_src_port and new_dst_port:
                             new_src_port.connect_to(new_dst_port)
-                        else:
-                            print(f"        ERROR: Could not find new source/dest ports ('{out_port.name()}' or '{original_dest_port.name()}').")
-                    else:
-                        print(f"      Skipping connection: Original destination node {original_dest_node_id} was not part of this paste operation.")
-        except StopIteration:
-            print(f"  [Main_Paste] Warning: Original node with ID {orig_id_conn} not found in current graph for connection rebuilding.")
-        except Exception as e_conn:
-            print(f"  [Main_Paste] Error during connection rebuilding for original ID {orig_id_conn}: {e_conn}")
-            import traceback
-            traceback.print_exc()
-    print("[Main_Paste] Finished rebuilding connections.")
+        except Exception: 
+            pass 
 
+    # Reselection
     new_nodes_instances = list(orig_to_new.values())
     if new_nodes_instances:
         self._graph.clear_selection()
         for n_instance in new_nodes_instances:
             n_instance.set_selected(True)
-        
-    print(f"[Main_Paste] Finished pasting {len(new_nodes_instances)} node(s) overall.")
