@@ -3,6 +3,7 @@ import os
 import json
 import threading
 import time
+import asyncio
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -11,22 +12,22 @@ from PySide6.QtWidgets import (
     QToolBar,
     QMessageBox,
     QFileDialog,
-    QWidget,
-    QLabel,
 )
 from PySide6.QtGui import QAction, QKeyEvent
 from PySide6.QtCore import Qt, QPointF, Signal, QObject, QTimer
 from NodeGraphQt import (
     NodeGraph,
-    BaseNode,
-    NodesPaletteWidget,
-)
-from NodeGraphQt import (
-    NodeGraph,
-    BaseNode,
     NodesPaletteWidget,
     BackdropNode,
 )
+
+from nodes.StartNode import StartNode
+from nodes.EndNode import EndNode
+from nodes.DelayNode import DelayNode
+from nodes.KeyboardNode import KeyboardNode
+from nodes.MouseNode import MouseNode
+from handlers.Overlay import overlay_update_loop
+
 # print(f"--- DEBUG Environment Check ---")
 # print(f"Python version: {sys.version}")
 # print(f"PySide6 version: {PySide6.__version__}")
@@ -34,15 +35,11 @@ from NodeGraphQt import (
 # print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
 # print("------------------------------------")
 
-from pynput.keyboard import Controller as KeyboardController
-from pynput.mouse import Controller as MouseController
-from pynput.mouse import Button
+
 from pynput.keyboard import Key
 from pynput.keyboard import Listener as KeyboardListener
 from pynput.mouse import Listener as MouseListener
 
-keyboard = KeyboardController()
-mouse = MouseController()
 
 hard_start = False
 hard_stop = False
@@ -78,294 +75,10 @@ listener = MouseListener(on_move=on_move)
 listener.start()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 0) Screen Overlays
-# ──────────────────────────────────────────────────────────────────────────────
-show_coords = False
-mouse_x, mouse_y = 0, 0
-
-import asyncio
-class Overlay(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowFlags(
-            Qt.FramelessWindowHint |
-            Qt.WindowStaysOnTopHint |
-            Qt.Tool
-        )
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.label = QLabel("", self)
-        self.label.setStyleSheet("color: white; background-color: rgba(0,0,0,0); font-size: 16px;")
-        self.label.move(0, 0)
-        self.resize(200, 30)
-        self.hide()
-
-    def update_text(self, x, y):
-        """
-        Update the overlay text with the current mouse coordinates.
-        """
-        self.label.setText(f"X: {x}  Y: {y}")
-        self.label.adjustSize()
-        self.resize(self.label.size())
-
-    def show_at_top_right(self):
-        """
-        Move the overlay to the top-right corner of the primary screen.
-        """
-        screen_geometry = QApplication.primaryScreen().geometry()
-        self.move(screen_geometry.width() - self.width(), 0)
-        self.show()
-
-async def overlay_update_loop():
-    """
-    Main loop to update the overlay with mouse coordinates.
-    This runs asynchronously and updates the overlay every 50ms.
-    """
-    overlay = Overlay()
-
-    timer = QTimer()
-    timer.timeout.connect(lambda: None)
-    timer.start(50)
-
-    while True:
-        if show_coords:
-            overlay.update_text(mouse_x, mouse_y)
-            if not overlay.isVisible():
-                overlay.show_at_top_right()
-        else:
-            if overlay.isVisible():
-                overlay.hide()
-        await asyncio.sleep(0.05)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 1) Define “global” list of key names for KeyboardNode’s drop‐down.
-# ──────────────────────────────────────────────────────────────────────────────
-KEY_NAMES = [
-    'None',
-    'A', 'B', 'C', 'D', 'E', 'F', 'G',
-    'H', 'I', 'J', 'K', 'L', 'M', 'N',
-    'O', 'P', 'Q', 'R', 'S', 'T', 'U',
-    'V', 'W', 'X', 'Y', 'Z',
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-    'Enter', 'Space', 'Tab', 'Esc',
-    'Shift', 'Ctrl', 'Alt',
-    'Up', 'Down', 'Left', 'Right',
-    'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
-]
-
-mouse_button_map = {
-    "Left": Button.left,
-    "Right": Button.right,
-    "Center": Button.middle,
-    "Mouse4": Button.x1,  # Side button 1
-    "Mouse5": Button.x2,  # Side button 2
-}
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # 1.1) Define colors for node highlighting and default color.
 # ──────────────────────────────────────────────────────────────────────────────
 NODE_HIGHLIGHT_COLOR = (34, 47, 61)  # light‐yellow (RGB)
 NODE_DEFAULT_COLOR   = (13, 18, 23)  # plain white (RGB)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 2) Define custom nodes: StartNode, EndNode, DelayNode, KeyboardNode, MouseNode.
-# ──────────────────────────────────────────────────────────────────────────────
-class StartNode(BaseNode):
-    """
-    “Start” node: no properties.
-    Fires the loop when PLAY is pressed.
-    """
-    __identifier__ = 'Automation'
-    NODE_NAME = 'Start'
-
-    def __init__(self):
-        super(StartNode, self).__init__()
-        self.add_output('out')
-
-    def process(self, **kwargs):
-        """
-        In a real engine, this would “emit” the start‐signal.
-        Here it’s stubbed just to show the ID.
-        """
-        print(f"[StartNode: {self.id}] Fired.")
-
-
-class EndNode(BaseNode):
-    """
-    “End” node: no properties.
-    When a loop reaches this node, it will return to its Start node.
-    """
-    __identifier__ = 'Automation'
-    NODE_NAME = 'End'
-
-    def __init__(self):
-        super(EndNode, self).__init__()
-        # Only an input socket (since “End” receives a signal)
-        self.add_input('in')
-
-        #self.add_checkbox('loopable', 'Hard Stop', False)
-        self.add_combo_menu('repeat', 'Repeat', ['Single', 'Repeat'])
-        self.set_property('repeat', 'Repeat')
-
-    def process(self, **kwargs):
-        """
-        In a real engine, this would mark the loop’s end.
-        Here it’s stubbed just to show the ID.
-        """
-        print(f"[EndNode: {self.id}] Reached. Repeat: {self.get_property('repeat')}")
-
-
-class DelayNode(BaseNode):
-    """
-    “Delay” node: pauses execution for a given number of milliseconds.
-      • delay: Text input (ms to pause)
-    """
-    __identifier__ = 'Automation'
-    NODE_NAME = 'Delay'
-
-    def __init__(self):
-        super(DelayNode, self).__init__()
-        # One input and one output socket
-        self.add_input('in')
-        self.add_output('out')
-
-        # Numeric field as text input
-        self.add_text_input('delay', 'Delay (ms)')
-        self.set_property('delay', '1000')
-
-    def process(self, stop_event=None, **kwargs):
-        """
-        Sleep for the specified number of milliseconds, in 100ms chunks,
-        printing status each chunk so you see the delay happening.
-        """
-        try:
-            ms_total = int(self.get_property('delay'))
-        except ValueError:
-            ms_total = 0
-
-        print(f"[DelayNode: {self.id}] Beginning {ms_total} ms delay.")
-        # Break into 100ms increments so we can see progress
-        ms_done = 0
-        while ms_done < ms_total:
-            
-            if stop_event and stop_event.is_set():
-                print(f"[DelayNode: {self.id}] Stopped early at {ms_done}/{ms_total} ms")
-                return
-            
-            chunk = min(100, ms_total - ms_done)
-            time.sleep(chunk / 1000.0)
-            ms_done += chunk
-            #print(f"[DelayNode: {self.id}] still sleeping... {ms_done}/{ms_total} ms")
-        print(f"[DelayNode: {self.id}] Completed delay.")
-
-
-class KeyboardNode(BaseNode):
-    """
-    “Keyboard” action node:
-      • key:      Combo (drop‐down of KEY_NAMES)
-      • duration: Text input (ms to hold)
-    """
-    __identifier__ = 'Automation'
-    NODE_NAME = 'Keyboard'
-
-    def __init__(self):
-        super(KeyboardNode, self).__init__()
-        # One input, one output socket
-        self.add_input('in')
-        self.add_output('out')
-
-        # Drop‐down of key names
-        self.add_combo_menu('key', 'Key', KEY_NAMES)
-
-        # Drop‐down of type
-        self.add_combo_menu('type', 'Type', ['Press', 'Release', 'Hold'])
-        # Duration (ms) as text
-        self.add_text_input('duration', 'Duration (ms) [Hold only]')
-
-        # Defaults
-        self.set_property('key', 'Enter')
-        self.set_property('type', 'Hold')
-        self.set_property('duration', '100')
-
-    def process(self, **kwargs):
-        key = self.get_property('key')
-        type = self.get_property('type')
-        try:
-            ms = int(self.get_property('duration'))
-        except ValueError:
-            ms = 0
-        print(f"[KeyboardNode: {self.id}] Key='{key}', Duration={ms}ms")
-
-        if type == 'Press':
-            keyboard.press(key.lower())
-        elif type == 'Release':
-            keyboard.release(key.lower())
-        elif type == 'Hold':
-            keyboard.press(key.lower())
-            time.sleep(ms / 1000.0)
-            keyboard.release(key.lower())
-
-
-
-class MouseNode(BaseNode):
-    """
-    “Mouse” action node:
-      • x:         Text input (X coord)
-      • y:         Text input (Y coord)
-      • button:    Combo (Left / Right / Middle)
-      • hold:      Text input (ms to hold)
-    """
-    __identifier__ = 'Automation'
-    NODE_NAME = 'Mouse'
-
-    def __init__(self):
-        super(MouseNode, self).__init__()
-        # One input, one output socket
-        self.add_input('in')
-        self.add_output('out')
-
-        # Numeric coords as text inputs
-        self.add_text_input('x', 'X Coordinate')
-        self.add_text_input('y', 'Y Coordinate')
-        self.add_combo_menu('button', 'Button', ['Move', 'Left', 'Right', 'Middle'])
-        self.add_text_input('hold', 'Hold Time (ms)')
-
-        # Defaults
-        self.set_property('x', '0')
-        self.set_property('y', '0')
-        self.set_property('button', 'Move')
-        self.set_property('hold', '100')
-
-    def process(self, **kwargs):
-        try:
-            x = int(self.get_property('x'))
-        except ValueError:
-            x = 0
-        try:
-            y = int(self.get_property('y'))
-        except ValueError:
-            y = 0
-        button = self.get_property('button')
-        try:
-            ms = int(self.get_property('hold'))
-        except ValueError:
-            ms = 0
-        print(f"[MouseNode: {self.id}] Clicking at ({x}, {y}) with '{button}', hold {ms}ms")
-
-        if button == 'Move':
-            mouse.position = (x, y)
-            return
-
-        button_to_click = mouse_button_map.get(button)
-
-        if button_to_click:
-            mouse.position = (x, y)
-            mouse.press(button_to_click)
-            time.sleep(ms / 1000.0)
-            mouse.release(button_to_click)
-        else:
-            print(f"Button '{button}' not recognized")
-            
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 3) Simple signals for thread control
