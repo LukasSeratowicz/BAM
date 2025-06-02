@@ -1,4 +1,4 @@
-# AutomationDesigner/DeleteNodeEvent.py
+# AutomationDesigner/DeleteNodeEventHandler.py
 
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QMessageBox

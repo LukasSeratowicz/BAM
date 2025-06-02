@@ -1,4 +1,4 @@
-# AutomationDesigner/BuildToolbar.py
+# AutomationDesigner/BuildToolbarHandler.py
 
 from PySide6.QtWidgets import QToolBar
 from PySide6.QtGui import QAction

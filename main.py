@@ -21,19 +21,20 @@ from NodeGraphQt import (
     BackdropNode,
 )
 
-# print(f"--- DEBUG Environment Check ---")
-# print(f"Python version: {sys.version}")
-# print(f"PySide6 version: {PySide6.__version__}")
-# print(f"Qt version used by PySide6: {PySide6.QtCore.qVersion()}")
-# print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
-# print("------------------------------------")
-
+# ──────────────────────────────────────────────────────────────────────────────
+# NODES
+# ──────────────────────────────────────────────────────────────────────────────
 
 from nodes.StartNode import StartNode
 from nodes.EndNode import EndNode
 from nodes.DelayNode import DelayNode
 from nodes.KeyboardNode import KeyboardNode
 from nodes.MouseNode import MouseNode
+
+# ──────────────────────────────────────────────────────────────────────────────
+# HANDLERS
+# ──────────────────────────────────────────────────────────────────────────────
+
 from handlers.Overlay import overlay_update_loop
 from handlers.LoopController import LoopController
 
@@ -43,8 +44,12 @@ keyboardListener.start()
 from handlers.MouseListener import mouseListener
 mouseListener.start()
 
-from AutomationDesigner.DeleteNodeEvent import deleteNodeEventHandler
-from AutomationDesigner.BuildToolbar import buildToolbarHandler
+# ──────────────────────────────────────────────────────────────────────────────
+# AUTOMATION DESIGNER HANDLERS
+# ──────────────────────────────────────────────────────────────────────────────
+
+from AutomationDesigner.DeleteNodeEventHandler import deleteNodeEventHandler
+from AutomationDesigner.BuildToolbarHandler import buildToolbarHandler
 from AutomationDesigner.OnNewGraphHandler import onNewGraphHandler
 from AutomationDesigner.OnSaveHandler import onSaveHandler
 from AutomationDesigner.ClearAllNodesFallbackHandler import clearAllNodesFallbackHandler
@@ -160,7 +165,7 @@ class AutomationDesigner(QMainWindow):
         buildToolbarHandler(self)
     
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.3) Save/Load/New handlers
+    # 4.3) Save/Load/New/Close handlers
     # ──────────────────────────────────────────────────────────────────────────
     def _on_new_graph(self):
         onNewGraphHandler(self)
@@ -245,7 +250,7 @@ class AutomationDesigner(QMainWindow):
 
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.21) Highlight the node that just started
+    # 4.11) Highlight the node that just started
     # ──────────────────────────────────────────────────────────────────────────
     def _on_node_started(self, msg: str):
         onNodeStartedHandler(self, msg, NODE_DEFAULT_COLOR, NODE_HIGHLIGHT_COLOR, BackdropNode)
