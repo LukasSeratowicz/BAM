@@ -43,6 +43,9 @@ No more stacking items on top of your keyboard to hold a button down :)
 - [ ] [BLOCK] **FLOAT Variable** - input: *float* - options: *name [String], on null [String]* - output: *said float*
 - [ ] [BLOCK] **INT Variable** - input: *int* - options: *name [String], on null [String]* - output: *said int*
 - [ ] [BLOCK] **TEXT Variable** - input: *text* - options: *name [String], on null [String]* - output: *said text*
+- [ ] [BLOCK] **ADD** - input: *int/float, int/float* - options: *variable1 minus? [Bool], variable2 minus? [Bool]* - output: *int/float*
+- [ ] [BLOCK] **MULTIPLY** - input: *int/float, int/float* - options: *variable1 minus? [Bool], variable2 minus? [Bool]* - output: *int/float*
+- [ ] [BLOCK] **DEVIDE** - input: *int/float, int/float* - options: *variable1 minus? [Bool], variable2 minus? [Bool]* - output: *int/float*
 - [ ] [BLOCK] **App Dimensions** - input: *applications [List]* - options: *none* - output: *x, y, width, height of the app*
 - [ ] Add the ability to save the current canvas as a single node to use in more advanced workflows
 - [ ] Redesign Tool Bar on top
