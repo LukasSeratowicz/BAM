@@ -72,7 +72,7 @@ No more stacking items on top of your keyboard to hold a button down :)
 
 #### **Release 0.1.6** - Copy Paste
 - Added Ctrl+C and Ctrl+V to copy paste currently selected node/s
-- Fixed Multiple nodes selection: Shift - select, Ctrl - deselect
+- Fixed Multiple nodes selection: Shift-select, Ctrl-deselect
 - Fixed mouse selection area
 
 #### **Release 0.1.5** - Code Rework
