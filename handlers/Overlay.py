@@ -1,5 +1,7 @@
 # handlers/Overlay.py
 
+import shared.globals as g
+
 import asyncio
 from PySide6.QtWidgets import (
     QApplication,
@@ -10,8 +12,6 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
 )
-show_coords = False
-mouse_x, mouse_y = 0, 0
 
 
 class Overlay(QWidget):
@@ -57,8 +57,8 @@ async def overlay_update_loop():
     timer.start(50)
 
     while True:
-        if show_coords:
-            overlay.update_text(mouse_x, mouse_y)
+        if g.show_coords:
+            overlay.update_text(g.mouse_x, g.mouse_y)
             if not overlay.isVisible():
                 overlay.show_at_top_right()
         else:

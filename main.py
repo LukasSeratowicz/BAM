@@ -1,3 +1,9 @@
+# main.py
+
+import shared.globals as g
+g.ensure_initialized()
+print("[DEBUG] shared/globals contains:", dir(g))
+
 import sys
 import os
 import json
@@ -27,6 +33,7 @@ from nodes.DelayNode import DelayNode
 from nodes.KeyboardNode import KeyboardNode
 from nodes.MouseNode import MouseNode
 from handlers.Overlay import overlay_update_loop
+from handlers.LoopController import LoopController
 
 # print(f"--- DEBUG Environment Check ---")
 # print(f"Python version: {sys.version}")
@@ -35,57 +42,19 @@ from handlers.Overlay import overlay_update_loop
 # print(f"NodeGraphQt version: {NodeGraphQt.__version__}")
 # print("------------------------------------")
 
+from handlers.KeyboardListener import keyboardListener
+keyboardListener.start()
 
-from pynput.keyboard import Key
-from pynput.keyboard import Listener as KeyboardListener
-from pynput.mouse import Listener as MouseListener
+from handlers.MouseListener import mouseListener
+mouseListener.start()
 
 
-hard_start = False
-hard_stop = False
-
-def on_press(key):
-    global show_coords
-    try:
-        if key == Key.f1:
-            print("F1 key pressed!")
-        if key == Key.f2:
-            print("F2 key pressed!")
-        elif key == Key.f3:
-            show_coords = not show_coords
-    except AttributeError:
-        pass
-
-def on_release(key):
-    global hard_stop, hard_start
-    if key == Key.f1:
-        hard_start = True
-    if key == Key.f2:
-        hard_stop = True
-
-def on_move(x, y):
-    global mouse_x, mouse_y
-    mouse_x = x
-    mouse_y = y
-    
-listener = KeyboardListener(on_press=on_press, on_release=on_release)
-listener.start()
-
-listener = MouseListener(on_move=on_move)
-listener.start()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 1.1) Define colors for node highlighting and default color.
+# STATIC VARIABLES
 # ──────────────────────────────────────────────────────────────────────────────
 NODE_HIGHLIGHT_COLOR = (34, 47, 61)  # light‐yellow (RGB)
 NODE_DEFAULT_COLOR   = (13, 18, 23)  # plain white (RGB)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 3) Simple signals for thread control
-# ──────────────────────────────────────────────────────────────────────────────
-class LoopController(QObject):
-    loop_iteration_finished = Signal(str)
-    node_started = Signal(str)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -163,7 +132,7 @@ class AutomationDesigner(QMainWindow):
         # 4.1.11) Add this timer to check hard_start flag every 100ms
         self._hard_start_timer = QTimer(self)
         self._hard_start_timer.timeout.connect(self._check_hard_start)
-        self._hard_start_timer.start(100)
+        self._hard_start_timer.start(33)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.11) Delete nodes with Delete or Backspace key
@@ -299,8 +268,10 @@ class AutomationDesigner(QMainWindow):
         # Auto-save the current graph
         self.saveGraphs() # Save the current graph before closing
 
-        listener.stop() # Stop pynput listener
-        listener.join() # Wait for listener thread to finish
+        mouseListener.stop() # Stop pynput listener
+        keyboardListener.stop() # Stop pynput listener
+        mouseListener.join() # Wait for listener thread to finish
+        keyboardListener.join() # Wait for listener thread to finish
         super().closeEvent(event)
         event.accept()
 
@@ -485,10 +456,9 @@ class AutomationDesigner(QMainWindow):
             if stop_event.is_set():
                 break
 
-            global hard_stop
-            if hard_stop:
+            if g.hard_stop:
                 print(f"[LoopWorker-{start_id}] Hard stop triggered, exiting loop.")
-                hard_stop = False
+                g.hard_stop = False
                 QTimer.singleShot(0, self._on_stop)
                 return
 
@@ -582,15 +552,16 @@ class AutomationDesigner(QMainWindow):
     # 4.20) Check for F1 - hard start
     # ──────────────────────────────────────────────────────────────────────────
     def _check_hard_start(self):
-        global hard_start, hard_stop
-        if hard_start:
+        #print("Checking hard_start:", g.hard_start)
+        #print("Checking hard_stop:", g.hard_stop)
+        if g.hard_start:
             print("[Main] Hard start detected! Starting automation.")
             self._on_play()
-            hard_start = False
-        if hard_stop:
+            g.hard_start = False
+        if g.hard_stop:
             print("[Main] Hard stop detected! Stopping automation.")
             self._on_stop()
-            hard_stop = False
+            g.hard_stop = False
 
 
     # ──────────────────────────────────────────────────────────────────────────
