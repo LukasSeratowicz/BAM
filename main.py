@@ -12,9 +12,27 @@ from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QDockWidget,
+    QGraphicsView,
 )
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtCore import Qt, QPointF, QTimer
+
+# monkey patch the QGraphicsScene.setSelectionArea method to handle deviceTransform
+from PySide6.QtWidgets import QGraphicsScene
+_original_set_selection = QGraphicsScene.setSelectionArea
+
+def _patched_setSelectionArea(self, path, mode, deviceTransform=None):
+    if deviceTransform is None:
+        _original_set_selection(self, path,
+                                Qt.ReplaceSelection,
+                                mode)
+    else:
+        _original_set_selection(self, path,
+                                Qt.ReplaceSelection,
+                                mode,
+                                deviceTransform)
+QGraphicsScene.setSelectionArea = _patched_setSelectionArea
+
 from NodeGraphQt import (
     NodeGraph,
     NodesPaletteWidget,
@@ -124,6 +142,7 @@ class AutomationDesigner(QMainWindow):
         self._view = self._graph.viewer()
         self._view.setContextMenuPolicy(Qt.CustomContextMenu)
         self._view.customContextMenuRequested.connect(self._show_context_menu)
+        self._view.setDragMode(QGraphicsView.RubberBandDrag)
 
         # 4.1.6) Remember the last scene position (for placing new nodes):
         self._last_scene_pos = QPointF(0, 0)
@@ -158,6 +177,8 @@ class AutomationDesigner(QMainWindow):
 
         # 4.1.12) Define a clipboard for copy/paste operations:
         self._clipboard = []
+
+        
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.1) KEY PRESS EVENT HANDLER
