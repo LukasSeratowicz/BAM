@@ -74,3 +74,22 @@ class MouseNode(BaseNode):
             mouse.release(button_to_click)
         else:
             print(f"Button '{button}' not recognized")
+
+    def copy(self):
+        new_node = MouseNode()
+        for prop_name, _ in self.properties().items():
+            if prop_name in ('inputs', 'outputs', 'id'):
+                continue
+            try:
+                new_node.set_property(prop_name, self.get_property(prop_name))
+            except Exception:
+                pass
+
+        pos = self.pos()
+        try:
+            x, y = pos.x(), pos.y()
+        except AttributeError:
+            x, y = pos[0], pos[1]
+        new_node.set_pos(x + 20, y + 20)
+
+        return new_node

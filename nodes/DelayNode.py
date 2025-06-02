@@ -47,3 +47,23 @@ class DelayNode(BaseNode):
             ms_done += chunk
             #print(f"[DelayNode: {self.id}] still sleeping... {ms_done}/{ms_total} ms")
         print(f"[DelayNode: {self.id}] Completed delay.")
+
+        
+    def copy(self):
+        new_node = DelayNode()
+        for prop_name, _ in self.properties().items():
+            if prop_name in ('inputs', 'outputs', 'id'):
+                continue
+            try:
+                new_node.set_property(prop_name, self.get_property(prop_name))
+            except Exception:
+                pass
+
+        pos = self.pos()
+        try:
+            x, y = pos.x(), pos.y()
+        except AttributeError:
+            x, y = pos[0], pos[1]
+        new_node.set_pos(x + 20, y + 20)
+
+        return new_node
