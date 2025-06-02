@@ -66,3 +66,22 @@ class KeyboardNode(BaseNode):
             keyboard.press(key.lower())
             time.sleep(ms / 1000.0)
             keyboard.release(key.lower())
+      
+    def copy(self):
+        new_node = KeyboardNode()
+        for prop_name, _ in self.properties().items():
+            if prop_name in ('inputs', 'outputs', 'id'):
+                continue
+            try:
+                new_node.set_property(prop_name, self.get_property(prop_name))
+            except Exception:
+                pass
+
+        pos = self.pos()
+        try:
+            x, y = pos.x(), pos.y()
+        except AttributeError:
+            x, y = pos[0], pos[1]
+        new_node.set_pos(x + 20, y + 20)
+
+        return new_node

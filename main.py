@@ -65,6 +65,11 @@ from AutomationDesigner.RunLoopHandler import runLoopHandler
 from AutomationDesigner.OnLoopIterationFinishedHandler import onLoopIterationFinishedHandler
 from AutomationDesigner.CheckHardStartHandler import checkHardStartHandler
 from AutomationDesigner.OnNodeStartedHandler import onNodeStartedHandler
+from AutomationDesigner.CopyPasteEventHandler import (
+    copyPasteEventHandler,
+    copySelectedNodesHandler,
+    pasteSelectedNodesHandler,
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STATIC VARIABLES
@@ -151,13 +156,26 @@ class AutomationDesigner(QMainWindow):
         self._hard_start_timer.timeout.connect(self._check_hard_start)
         self._hard_start_timer.start(33)
 
+        # 4.1.12) Define a clipboard for copy/paste operations:
+        self._clipboard = []
+
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.1) Delete nodes with Delete or Backspace key
+    # 4.1) KEY PRESS EVENT HANDLER
     # ──────────────────────────────────────────────────────────────────────────
     def keyPressEvent(self, event: QKeyEvent):
         deleteNodeEventHandler(self, event)
+        copyPasteEventHandler(self, event)
         super(AutomationDesigner, self).keyPressEvent(event)
-    
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4.1.1) Copy/Paste handlers
+    # ──────────────────────────────────────────────────────────────────────────    
+    def copySelectedNodes(self):
+        copySelectedNodesHandler(self)
+
+    def pasteSelectedNodes(self):
+        pasteSelectedNodesHandler(self)
+
     # ──────────────────────────────────────────────────────────────────────────
     # 4.2) Build toolbar with Play, Pause, Stop
     # ──────────────────────────────────────────────────────────────────────────
