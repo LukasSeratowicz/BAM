@@ -30,20 +30,29 @@ class EndNode(BaseNode):
 
         
     def copy(self):
-        new_node = EndNode()
-        for prop_name, _ in self.properties().items():
-            if prop_name in ('inputs', 'outputs', 'id'):
-                continue
-            try:
-                new_node.set_property(prop_name, self.get_property(prop_name))
-            except Exception:
-                pass
-
-        pos = self.pos()
+        node_pos = self.pos() 
         try:
-            x, y = pos.x(), pos.y()
-        except AttributeError:
-            x, y = pos[0], pos[1]
-        new_node.set_pos(x + 20, y + 20)
+            orig_x, orig_y = node_pos.x(), node_pos.y()
+        except AttributeError: 
+            orig_x, orig_y = node_pos[0], node_pos[1]
 
-        return new_node
+        props = {}
+
+        try:
+            all_prop_keys = list(self.properties().keys())
+            for name in all_prop_keys:
+                if name not in ('inputs', 'outputs', 'id'):
+                    val = self.get_property(name)
+                    props[name] = val
+        except Exception as e:
+            print(f"  [EndNode.copy] ERROR during collection from self.properties(): {e}")
+
+        custom_widget_prop_names = ['repeat']
+        for name in custom_widget_prop_names:
+            try:
+                val = self.get_property(name) 
+                props[name] = val
+            except Exception as e:
+                print(f"    [EndNode.copy] ERROR collecting explicitly for '{name}': {e}. It will not be copied.")
+                
+        return (self.id, self.__class__, props, (orig_x, orig_y))
