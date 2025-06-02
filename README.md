@@ -55,7 +55,6 @@ No more stacking items on top of your keyboard to hold a button down :)
 
 #### [Future Plan] **Major Release 0.2.0** - Branches Update
 - [ ] Add support for multiple branches out of one node
-- [ ] Fix mouse selection area (broken in current PySide version, might need to monkey-patch it)
 - [ ] Rework the AutoSave system
 
 
@@ -67,12 +66,14 @@ No more stacking items on top of your keyboard to hold a button down :)
 #### [Future Plan] **Release 0.1.8** - Keyboard Updates
 - [ ] Finish implementing Keyboard (right now, most keys do not work)
 
-#### [Future Plan] **Release 0.1.7** - Hotkeys Rework
+#### [In Progress] **Release 0.1.7** - Hotkeys Rework
 - [ ] Start Blocks now have Buttons to start this segment
 - [ ] fix F2: doesn't always stop all nodes from firing
 
-#### [In Progress] **Release 0.1.6** - Copy Paste
-- [ ] Add Ctrl+C and Ctrl+V to copy paste currently selected node/s
+#### **Release 0.1.6** - Copy Paste
+- Added Ctrl+C and Ctrl+V to copy paste currently selected node/s
+- Fixed Multiple nodes selection: Shift - select, Ctrl - deselect
+- Fixed mouse selection area
 
 #### **Release 0.1.5** - Code Rework
 - Refactor monolith code into a modular structure for development
