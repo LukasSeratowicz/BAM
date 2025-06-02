@@ -30,29 +30,57 @@ No more stacking items on top of your keyboard to hold a button down :)
 
 ### Future Versions:
 
-- [ ] Implement CV (Computer Vision) blocks (e.g. find colour, find pattern, find face, find human, and so on...)
-- [ ] Implement More automation like Scroll, Type Text, Send Email, ...
-- [ ] Implement Simple Scripting - Add Variables and If/Else Statement blocks
+- [ ] [BLOCK] **Capture Screen** - input: *x, y, width, height* - options: *none* - output: *image from the screen*
+- [ ] [BLOCK] **Image to Text** - input: *image* - options: *color* - output: *text*
+- [ ] [BLOCK] **Text to Int** - input: *text* - options: *base [Int]* - output: *integer*
+- [ ] [BLOCK] **Text to Float** - input: *text* - options: *precision [Int]* - output: *float*
+- [ ] [BLOCK] **Move Mouse** - input: *x, y* - options: *speed [String]* - output: *none*
+- [ ] [BLOCK] **Mouse Click** - input: *button [String]* - options: *click_type [single/double]* - output: *none*
+- [ ] [BLOCK] **Mouse Scroll** - input: *direction [String], amount [Int]* - options: *speed [String]* - output: *none*
+- [ ] [BLOCK] **IF Statement** - input: *condition [Boolean]* - options: *none* - output: *executes block*
+- [ ] [BLOCK] **WHILE Loop** - input: *condition [Boolean]* - options: *timeout [Int]* - output: *repeats block*
+- [ ] [BLOCK] **FOR Loop** - input: *interval [Float] or trigger [String]* - options: *mode [periodic/trigger]* - output: *executes block*
+- [ ] [BLOCK] **FLOAT Variable** - input: *float* - options: *name [String], on null [String]* - output: *said float*
+- [ ] [BLOCK] **INT Variable** - input: *int* - options: *name [String], on null [String]* - output: *said int*
+- [ ] [BLOCK] **TEXT Variable** - input: *text* - options: *name [String], on null [String]* - output: *said text*
+- [ ] [BLOCK] **App Dimensions** - input: *applications [List]* - options: *none* - output: *x, y, width, height of the app*
 - [ ] Add the ability to save the current canvas as a single node to use in more advanced workflows
-- [ ] Redesign UI
+- [ ] Redesign Tool Bar on top
 - [ ] Fix maaaany bugs
 
-### Version 0.1
+### **Version 0.2**
 
-- [ ] Finish implementing Keyboard (right now, most keys do not work)
-- [ ] Fix mouse selection area (broken in current PySide version, might need to monkey-patch it)
-- [ ] Add Ctrl+C and Ctrl+V to copy paste currently selected node/s
+#### [Future Plan] **Major Release 0.2.0** - Branches Update
 - [ ] Add support for multiple branches out of one node
-- [ ] Separate Mouse Move from Clicking (Move is useless because Clicking moves, then clicks)
-- [ ] F2 doesn't always stop all nodes from firing
+- [ ] Fix mouse selection area (broken in current PySide version, might need to monkey-patch it)
+- [ ] Rework the AutoSave system
 
-#### Release 0.1.4 - Visualisations Update
+
+### **Version 0.1**
+
+#### [Future Plan] **Release 0.1.9** - Mouse Updates
+- [ ] Separate Mouse Move from Clicking (Move is useless because Clicking moves, then clicks)
+
+#### [Future Plan] **Release 0.1.8** - Keyboard Updates
+- [ ] Finish implementing Keyboard (right now, most keys do not work)
+
+#### [Future Plan] **Release 0.1.7** - Hotkeys Rework
+- [ ] Start Blocks now have Buttons to start this segment
+- [ ] fix F2: doesn't always stop all nodes from firing
+
+#### [Future Plan] **Release 0.1.6** - Copy Paste
+- [ ] Add Ctrl+C and Ctrl+V to copy paste currently selected node/s
+
+#### [In Progress] **Release 0.1.5** - Code Rework
+- [ ] Refactor monolith code into a modular structure for development
+
+#### **Release 0.1.4** - Visualisations Update
 - Nodes are now highlighted when active
 - Backdrops are now highlighted when active
 - Stop (or F2) now hard stops automation instead of soft stopping
 - End Block now has 2 options: `Repeat` - go back to Start block | `Single` - finish and stop
 
-#### Release 0.1 - Preview Update
+#### **Major Release 0.1** - Preview Update
 - Basic implementation of Mouse and Keyboard automation
 - Basic GUI with block-nodes and backdrop for grouping
 - Simultaneous block execution
