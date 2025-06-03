@@ -89,6 +89,8 @@ from AutomationDesigner.CopyPasteEventHandler import (
     pasteSelectedNodesHandler,
 )
 from AutomationDesigner.KeyPressEventHandler import keyPressEventHandler
+from AutomationDesigner.HighlightNodeInPathHandler import highlightNodeInPathHandler
+from AutomationDesigner.ClearHighlightsForPathHandler import clearHighlightsForPathHandler
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STATIC VARIABLES
@@ -179,6 +181,9 @@ class AutomationDesigner(QMainWindow):
 
         # 4.1.12) Define a clipboard for copy/paste operations:
         self._clipboard = []
+
+        # 4.1.13) Initialize the active paths highlights dictionary:
+        self._active_paths_highlights = {}
 
         
 
@@ -295,10 +300,16 @@ class AutomationDesigner(QMainWindow):
 
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4.11) Highlight the node that just started
+    # 4.11) Highlight nodes
     # ──────────────────────────────────────────────────────────────────────────
     def _on_node_started(self, msg: str):
-        onNodeStartedHandler(self, msg, NODE_DEFAULT_COLOR, NODE_HIGHLIGHT_COLOR, BackdropNode)
+        onNodeStartedHandler(self, msg)
+
+    def _highlight_node_in_path(self, loop_start_id: str, node_id_to_highlight: str):
+        highlightNodeInPathHandler(self, loop_start_id, node_id_to_highlight, NODE_HIGHLIGHT_COLOR)
+
+    def _clear_highlights_for_path(self, loop_start_id: str):
+        clearHighlightsForPathHandler(self, loop_start_id, NODE_DEFAULT_COLOR)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

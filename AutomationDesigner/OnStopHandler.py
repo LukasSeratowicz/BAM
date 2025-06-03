@@ -2,20 +2,26 @@
 
 
 def onStopHandler(self, NODE_DEFAULT_COLOR, BackdropNode):
-        for start_id, stop_event in self._loop_stop_flags.items():
-            stop_event.set()
-        # Clear pause flags as well
-        for start_id, pause_event in self._loop_pause_flags.items():
-            pause_event.clear()
-        print("[Main] All loops stopped.")
+    active_loops_were_present = False
+    if hasattr(self, '_loop_stop_flags') and self._loop_stop_flags:
+        active_loops_were_present = True
 
-        # Clear any existing highlight
-        r, g, b = NODE_DEFAULT_COLOR
-        for node in self._graph.all_nodes():
-            node.set_color(r, g, b)
-            if isinstance(node, BackdropNode):
-                node.update()
+        all_start_ids_to_stop = list(self._loop_stop_flags.keys())
+        
+        for start_id in all_start_ids_to_stop:
+            if start_id in self._loop_stop_flags:
+                self._loop_stop_flags[start_id].set()
+            
+            if hasattr(self, '_loop_pause_flags') and start_id in self._loop_pause_flags:
+                self._loop_pause_flags[start_id].clear()
 
-        # Clear highlighted nodes and backdrops        
-        self._highlighted_nodes.clear()
-        self._highlighted_backdrops.clear()
+            if hasattr(self, '_clear_highlights_for_path'):
+                self._clear_highlights_for_path(start_id) 
+        
+        if hasattr(self, '_active_paths_highlights'):
+            self._active_paths_highlights.clear()
+
+    if active_loops_were_present:
+        print("[Main] All loops signaled to stop and their highlights cleared.")
+    else:
+        print("[Main] Stop called, but no active loops were registered to stop.")
