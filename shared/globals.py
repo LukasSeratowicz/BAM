@@ -84,9 +84,15 @@ def init():
         'PrintScreen', 'Pause', 'SysReq', 'Help', 'Menu'
     ]
 
-    KEY_NAMES_AVAILABLE = ['None'] + sorted(list(set(_desired_key_strings)))
+    unique_ordered_keys = []
+    seen_keys = set()
+    for key_str in _desired_key_strings:
+        if key_str not in seen_keys:
+            unique_ordered_keys.append(key_str)
+            seen_keys.add(key_str)
+    KEY_NAMES_AVAILABLE = ['None'] + unique_ordered_keys
     
-    GLOBAL_KEY_PRESS_STATE = {key_str: False for key_str in _desired_key_strings}
+    GLOBAL_KEY_PRESS_STATE = {key_str: False for key_str in unique_ordered_keys}
 
 
 
