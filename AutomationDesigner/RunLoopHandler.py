@@ -18,12 +18,6 @@ def runLoopHandler(self, start_node, stop_event, pause_event, EndNode, DelayNode
         if stop_event.is_set():
             break
 
-        if g.hard_stop:
-            print(f"[LoopWorker-{start_id}] Hard stop triggered, exiting loop.")
-            g.hard_stop = False
-            QTimer.singleShot(0, self._on_stop)
-            return
-
         # 1.2) Highlight the Start node that just started
         self._loop_controller.node_started.emit(start_node.id)
         
