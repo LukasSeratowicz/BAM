@@ -305,17 +305,33 @@ class AutomationDesigner(QMainWindow):
     def _on_node_started(self, msg: str):
         onNodeStartedHandler(self, msg)
 
+
+    def _get_parent_backdrop(self, node_id_or_object):
+        if isinstance(node_id_or_object, str):
+            node = self._graph.get_node_by_id(node_id_or_object)
+        else:
+            node = node_id_or_object
+        
+        if not node:
+            return None
+
+        for bp_node in self._graph.all_nodes():
+            if isinstance(bp_node, BackdropNode):
+                if node in bp_node.nodes():
+                    return bp_node
+        return None
+    
     def _highlight_node_in_path(self, loop_start_id: str, node_id_to_highlight: str):
-        highlightNodeInPathHandler(self, loop_start_id, node_id_to_highlight, NODE_HIGHLIGHT_COLOR)
+        highlightNodeInPathHandler(self, loop_start_id, node_id_to_highlight, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR)
 
     def _clear_highlights_for_path(self, loop_start_id: str):
-        clearHighlightsForPathHandler(self, loop_start_id, NODE_DEFAULT_COLOR)
+        clearHighlightsForPathHandler(self, loop_start_id, BackdropNode, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 5) Bootstrap the QApplication
 # ──────────────────────────────────────────────────────────────────────────────
-from qasync import QEventLoop, asyncSlot
+from qasync import QEventLoop
 if __name__ == '__main__':
 
     app = QApplication(sys.argv)

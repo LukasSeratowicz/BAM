@@ -15,6 +15,7 @@ def runLoopHandler(self, start_node, stop_event, pause_event, EndNode, DelayNode
                 time.sleep(0.1)
             if stop_event.is_set(): break
 
+            self._clear_highlights_for_path(start_id)
             self._highlight_node_in_path(start_id, start_node.id)
             
             start_node.process()

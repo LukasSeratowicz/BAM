@@ -1,17 +1,28 @@
 # AutomationDesigner/HighlightNodeInPathHandler.py
 
-def highlightNodeInPathHandler(self, loop_start_id, node_id_to_highlight, NODE_HIGHLIGHT_COLOR):
-    node = self._graph.get_node_by_id(node_id_to_highlight)
-    if node:
-        if loop_start_id not in self._active_paths_highlights:
-            self._active_paths_highlights[loop_start_id] = set()
+def highlightNodeInPathHandler(self, loop_start_id, node_id_to_highlight_now, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR):
+    prev_highlighted_node_id_for_this_loop = self._active_paths_highlights.get(loop_start_id)
+    node_to_highlight_obj = self._graph.get_node_by_id(node_id_to_highlight_now)
 
-        node.set_color(*NODE_HIGHLIGHT_COLOR) 
+    # 1. Unhighlight the previous node of THIS path, if it exists and is different
+    if prev_highlighted_node_id_for_this_loop and prev_highlighted_node_id_for_this_loop != node_id_to_highlight_now:
+        prev_node_obj = self._graph.get_node_by_id(prev_highlighted_node_id_for_this_loop)
+        if prev_node_obj:
+            is_prev_node_still_highlighted_by_another_path = False
+            # Check if this prev_node_id is the currently highlighted node in ANY OTHER path
+            for other_loop_s_id, active_node_id_in_other_loop in self._active_paths_highlights.items():
+                if other_loop_s_id != loop_start_id: # Must be a different path
+                    if active_node_id_in_other_loop == prev_highlighted_node_id_for_this_loop:
+                        is_prev_node_still_highlighted_by_another_path = True
+                        break
+            if not is_prev_node_still_highlighted_by_another_path:
+                prev_node_obj.set_color(*NODE_DEFAULT_COLOR)
 
-        self._active_paths_highlights[loop_start_id].add(node_id_to_highlight)
+    # 2. Highlight the new current node for THIS path
+    if node_to_highlight_obj:
+        node_to_highlight_obj.set_color(*NODE_HIGHLIGHT_COLOR)
+        self._active_paths_highlights[loop_start_id] = node_id_to_highlight_now
 
-        if hasattr(node, 'view') and hasattr(node.view, 'update'):
-            node.view.update()
-        self._view.update()
-    else:
-        print(f"  [DEBUG HIGHLIGHT] Node with ID '{node_id_to_highlight}' NOT FOUND.")
+    # 3. Update all backdrop highlights based on the current state of _active_paths_highlights
+    if hasattr(self, '_update_all_backdrop_highlights'):
+        self._update_all_backdrop_highlights()
