@@ -63,12 +63,14 @@ No more stacking items on top of your keyboard to hold a button down :)
 #### [Future Plan] **Release 0.1.9** - Mouse Updates
 - [ ] Separate Mouse Move from Clicking (Move is useless because Clicking moves, then clicks)
 
-#### [Future Plan] **Release 0.1.8** - Keyboard Updates
+#### [In Progress] **Release 0.1.8** - Keyboard Updates
 - [ ] Finish implementing Keyboard (right now, most keys do not work)
 
-#### [In Progress] **Release 0.1.7** - Hotkeys Rework
-- [ ] Start Blocks now have Buttons to start this segment
-- [ ] fix F2: doesn't always stop all nodes from firing
+#### **Release 0.1.7** - Hotkeys Rework
+- Start Blocks: now have Hotkeys to start each segment independently
+- fixed F2: now more reliably stops all nodes from firing
+- Reworked Nodes and Backdrop Highlights: end blocks do not clear the entire canvas
+- Start Block Hotkeys are now also globally checked, no need for app focus
 
 #### **Release 0.1.6** - Copy Paste
 - Added Ctrl+C and Ctrl+V to copy paste currently selected node/s
