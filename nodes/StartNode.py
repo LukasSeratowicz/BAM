@@ -1,12 +1,14 @@
 # nodes/StartNode.py
 
+import shared.globals as g
+
 from NodeGraphQt import (
     BaseNode,
 )
 
 class StartNode(BaseNode):
     """
-    “Start” node: no properties.
+    “Start” node: `key` - start key to trigger the loop.
     Fires the loop when PLAY is pressed.
     """
     __identifier__ = 'Automation'
@@ -16,12 +18,17 @@ class StartNode(BaseNode):
         super(StartNode, self).__init__()
         self.add_output('out')
 
+        
+        self.add_combo_menu('key', 'Key', g.KEY_NAMES_AVAILABLE)
+        self.set_property('key', 'None')
+        
+
     def process(self, **kwargs):
         """
         In a real engine, this would “emit” the start‐signal.
         Here it’s stubbed just to show the ID.
         """
-        print(f"[StartNode: {self.id}] Fired.")
+        print(f"[StartNode: {self.id}] Fired (Key: {self.get_property('key')}).")
 
     def copy(self):
         node_pos = self.pos() 
@@ -41,7 +48,7 @@ class StartNode(BaseNode):
         except Exception as e:
             print(f"  [StartNode.copy] ERROR during collection from self.properties(): {e}")
 
-        custom_widget_prop_names = []
+        custom_widget_prop_names = ['key']
         for name in custom_widget_prop_names:
             try:
                 val = self.get_property(name) 

@@ -88,6 +88,7 @@ from AutomationDesigner.CopyPasteEventHandler import (
     copySelectedNodesHandler,
     pasteSelectedNodesHandler,
 )
+from AutomationDesigner.KeyPressEventHandler import keyPressEventHandler
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STATIC VARIABLES
@@ -185,9 +186,13 @@ class AutomationDesigner(QMainWindow):
     # 4.1) KEY PRESS EVENT HANDLER
     # ──────────────────────────────────────────────────────────────────────────
     def keyPressEvent(self, event: QKeyEvent):
-        deleteNodeEventHandler(self, event)
         copyPasteEventHandler(self, event)
-        super(AutomationDesigner, self).keyPressEvent(event)
+        if not event.isAccepted():
+            deleteNodeEventHandler(self, event)
+        if not event.isAccepted():
+            keyPressEventHandler(self, event, StartNode)
+        if not event.isAccepted():
+            super(AutomationDesigner, self).keyPressEvent(event)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4.1.1) Copy/Paste handlers
