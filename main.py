@@ -89,7 +89,7 @@ from AutomationDesigner.CopyPasteEventHandler import (
     pasteSelectedNodesHandler,
 )
 from AutomationDesigner.KeyPressEventHandler import keyPressEventHandler
-from AutomationDesigner.HighlightNodeInPathHandler import highlightNodeInPathHandler
+from AutomationDesigner.HighlightNodeInPathHandler import highlightNodeInPathHandler, updateAllBackdropsHighlightsHandler
 from AutomationDesigner.ClearHighlightsForPathHandler import clearHighlightsForPathHandler
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -321,11 +321,14 @@ class AutomationDesigner(QMainWindow):
                     return bp_node
         return None
     
+    def _update_all_backdrop_highlights(self, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR):
+        updateAllBackdropsHighlightsHandler(self, BackdropNode, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR)
+
     def _highlight_node_in_path(self, loop_start_id: str, node_id_to_highlight: str):
         highlightNodeInPathHandler(self, loop_start_id, node_id_to_highlight, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR)
 
     def _clear_highlights_for_path(self, loop_start_id: str):
-        clearHighlightsForPathHandler(self, loop_start_id, BackdropNode, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR)
+        clearHighlightsForPathHandler(self, loop_start_id, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
