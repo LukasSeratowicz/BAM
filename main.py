@@ -174,7 +174,7 @@ class AutomationDesigner(QMainWindow):
         self._graph.show()
         self._on_load(file_path=self.DEFAULT_GRAPH_FILE)
 
-        # 4.1.11) Add this timer to check hard_start flag every 100ms
+        # 4.1.11) Add this timer to check hard_start flag every 33 ms
         self._hard_start_timer = QTimer(self)
         self._hard_start_timer.timeout.connect(self._check_hard_start)
         self._hard_start_timer.start(33)
@@ -185,6 +185,10 @@ class AutomationDesigner(QMainWindow):
         # 4.1.13) Initialize the active paths highlights dictionary:
         self._active_paths_highlights = {}
 
+        # 4.1.14) Add this timer to check Hotkeys every 50 ms
+        self._global_hotkey_poll_timer = QTimer(self)
+        self._global_hotkey_poll_timer.timeout.connect(self._check_global_hotkeys)
+        self._global_hotkey_poll_timer.start(50)
         
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -194,8 +198,8 @@ class AutomationDesigner(QMainWindow):
         copyPasteEventHandler(self, event)
         if not event.isAccepted():
             deleteNodeEventHandler(self, event)
-        if not event.isAccepted():
-            keyPressEventHandler(self, event, StartNode)
+        # if not event.isAccepted():
+        #     keyPressEventHandler(self, event, StartNode)
         if not event.isAccepted():
             super(AutomationDesigner, self).keyPressEvent(event)
 
@@ -305,7 +309,6 @@ class AutomationDesigner(QMainWindow):
     def _on_node_started(self, msg: str):
         onNodeStartedHandler(self, msg)
 
-
     def _get_parent_backdrop(self, node_id_or_object):
         if isinstance(node_id_or_object, str):
             node = self._graph.get_node_by_id(node_id_or_object)
@@ -330,6 +333,12 @@ class AutomationDesigner(QMainWindow):
     def _clear_highlights_for_path(self, loop_start_id: str):
         clearHighlightsForPathHandler(self, loop_start_id, NODE_HIGHLIGHT_COLOR, NODE_DEFAULT_COLOR)
 
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4.12) Check global hotkeys
+    # ──────────────────────────────────────────────────────────────────────────
+    def _check_global_hotkeys(self):
+        keyPressEventHandler(self, StartNode)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 5) Bootstrap the QApplication
