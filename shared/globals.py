@@ -21,7 +21,7 @@ def init():
     global KEY_NAMES_AVAILABLE
     global GLOBAL_KEY_PRESS_STATE
 
-    version = "0.1.7alpha"
+    version = "0.1.8alpha"
 
     hard_start  = False
     hard_stop   = False
