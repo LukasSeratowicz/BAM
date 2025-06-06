@@ -42,6 +42,7 @@ No more stacking items on top of your keyboard to hold a button down :)
 - [ ] [BLOCK] **FOR Loop** - input: *interval [Float] or trigger [String]* - options: *mode [periodic/trigger]* - output: *executes block*
 - [ ] [BLOCK] **FLOAT Variable** - input: *float* - options: *name [String], on null [String]* - output: *said float*
 - [ ] [BLOCK] **INT Variable** - input: *int* - options: *name [String], on null [String]* - output: *said int*
+- [ ] [BLOCK] **BOOL Variable** - input: *int/bool* - options: *name [String], on null [String]* - output: *said bool/int*
 - [ ] [BLOCK] **TEXT Variable** - input: *text* - options: *name [String], on null [String]* - output: *said text*
 - [ ] [BLOCK] **ADD** - input: *int/float, int/float* - options: *variable1 minus? [Bool], variable2 minus? [Bool]* - output: *int/float*
 - [ ] [BLOCK] **MULTIPLY** - input: *int/float, int/float* - options: *variable1 minus? [Bool], variable2 minus? [Bool]* - output: *int/float*
@@ -60,11 +61,11 @@ No more stacking items on top of your keyboard to hold a button down :)
 
 ### **Version 0.1**
 
-#### [Future Plan] **Release 0.1.9** - Mouse Updates
+#### [In Progress] **Release 0.1.9** - Mouse Node Update
 - [ ] Separate Mouse Move from Clicking (Move is useless because Clicking moves, then clicks)
 
-#### [In Progress] **Release 0.1.8** - Keyboard Updates
-- [ ] Finish implementing Keyboard (right now, most keys do not work)
+#### **Release 0.1.8** - Keyboard Node Update
+- Keyboard Node should now support all keyboard keys
 
 #### **Release 0.1.7** - Hotkeys Rework
 - Start Blocks: now have Hotkeys to start each segment independently
